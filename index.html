@@ -16,58 +16,56 @@
 
     <div class="container">
         <h1>El meu Panell de Ciclisme</h1>
-        <p id="estat-carrega">Connectant directament amb el teu compte de Strava...</p>
+        <p id="estat-carrega">Iniciant connexió directa de dades d'activitat...</p>
         
-        <!-- Aquí apareixeran les teves rutes soles -->
+        <!-- Zona de llistat de rutes -->
         <div id="llista-activitats" style="margin-top: 20px;"></div>
     </div>
 
     <script>
-        // Fes servir directament el token d'actualització permanent que ja està enllaçat a la teva bicicleta
+        // Credencials reals de l'aplicació
         const CLIENT_ID = '261216';
         const CLIENT_SECRET = '6ad27ecc4c089836d03ee867b3ed0ff3ededb62f';
         const REFRESH_TOKEN_PERMANENT = 'f23f739bbbd184157ea7615dbf5240ecdd7607a9';
 
-        // Execució directa i immediata en obrir el fitxer
-        (function() {
-            const params = new URLSearchParams();
-            params.append('client_id', CLIENT_ID);
-            params.append('client_secret', CLIENT_SECRET);
-            params.append('refresh_token', REFRESH_TOKEN_PERMANENT);
-            params.append('grant_type', 'refresh_token');
+        // Petició directa utilitzant la URL neta com exigeix el protocol de seguretat
+        const urlRefrescar = "https://strava.com" +
+                             "?client_id=" + CLIENT_ID +
+                             "&client_secret=" + CLIENT_SECRET +
+                             "&refresh_token=" + REFRESH_TOKEN_PERMANENT +
+                             "&grant_type=refresh_token";
 
-            // Demanem la clau d'entrada utilitzant el mètode resistent a bloquejos de Chrome
-            fetch('https://strava.com', {
-                method: 'POST',
-                body: params
-            })
-            .then(res => res.json())
-            .then(dades => {
-                if (dades.access_token) {
-                    document.getElementById('estat-carrega').textContent = "✓ Connexió establerta. Llegint les teves rutes...";
-                    descarregarSortides(dades.access_token);
-                } else {
-                    document.getElementById('estat-carrega').innerHTML = "<span style='color:red'>❌ Error de credencials amb Strava.</span>";
-                }
-            })
-            .catch(err => {
-                console.error(err);
-                document.getElementById('estat-carrega').innerHTML = "<span style='color:red'>❌ Error en connectar de manera local.</span>";
-            });
-        })();
+        // Executem la crida de fons de manera directa
+        fetch(urlRefrescar, { method: 'POST' })
+        .then(res => {
+            if (!res.ok) throw new Error("Error en refrescar la clau");
+            return res.json();
+        })
+        .then(dades => {
+            if (dades.access_token) {
+                document.getElementById('estat-carrega').textContent = "✓ Accés obtingut. Hola " + (dades.athlete ? dades.athlete.firstname : "Ciclista") + "! Carregant rutes...";
+                descarregarLesTevesSortides(dades.access_token);
+            } else {
+                throw new Error("Token buit");
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            document.getElementById('estat-carrega').innerHTML = "<span style='color:red'>❌ Error en connectar amb Strava. Revisa que l'ordinador tingui Internet.</span>";
+        });
 
-        function descarregarSortides(token) {
+        function descarregarLesTevesSortides(token) {
             fetch('https://strava.com', {
                 headers: { 'Authorization': 'Bearer ' + token }
             })
             .then(res => res.json())
             .then(activitats => {
                 const llista = document.getElementById('llista-activitats');
-                document.getElementById('estat-carrega').textContent = "Últimes sortides de ciclisme reals detectades:";
+                document.getElementById('estat-carrega').textContent = "Últimes sortides de ciclisme reals:";
                 llista.innerHTML = "";
 
                 if (!activitats || activitats.length === 0) {
-                    llista.innerHTML = "<p>No s'han trobat rutes recents.</p>";
+                    llista.innerHTML = "<p>No s'han trobat rutes recents en aquest compte.</p>";
                     return;
                 }
 
@@ -83,9 +81,11 @@
                         llista.appendChild(div);
                     }
                 });
+            })
+            .catch(err => {
+                document.getElementById('estat-carrega').innerHTML = "<span style='color:red'>❌ Error de descàrrega del llistat.</span>";
             });
         }
     </script>
 </body>
 </html>
-
