@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>El meu Panell de Ciclisme</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 20px; background-color: #f5f5f7; color: #333; }
+        .container { max-width: 600px; margin: 40px auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); text-align: center; }
+        h1 { color: #FC4C02; margin-bottom: 20px; }
+        p { color: #666; font-size: 1.1em; }
+        .activitat { background: #fafafa; border: 1px solid #eee; padding: 12px; margin: 10px 0; border-radius: 6px; text-align: left; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>El meu Panell de Ciclisme</h1>
+        <p id="estat-carrega">Connectant directament amb el teu compte de Strava...</p>
+        
+        <!-- Aquí apareixeran les teves rutes soles -->
+        <div id="llista-activitats" style="margin-top: 20px;"></div>
+    </div>
+
+    <script>
+        // Fes servir directament el token d'actualització permanent que ja està enllaçat a la teva bicicleta
+        const CLIENT_ID = '261216';
+        const CLIENT_SECRET = '6ad27ecc4c089836d03ee867b3ed0ff3ededb62f';
+        const REFRESH_TOKEN_PERMANENT = 'f23f739bbbd184157ea7615dbf5240ecdd7607a9';
+
+        // Execució directa i immediata en obrir el fitxer
+        (function() {
+            const params = new URLSearchParams();
+            params.append('client_id', CLIENT_ID);
+            params.append('client_secret', CLIENT_SECRET);
+            params.append('refresh_token', REFRESH_TOKEN_PERMANENT);
+            params.append('grant_type', 'refresh_token');
+
+            // Demanem la clau d'entrada utilitzant el mètode resistent a bloquejos de Chrome
+            fetch('https://strava.com', {
+                method: 'POST',
+                body: params
+            })
+            .then(res => res.json())
+            .then(dades => {
+                if (dades.access_token) {
+                    document.getElementById('estat-carrega').textContent = "✓ Connexió establerta. Llegint les teves rutes...";
+                    descarregarSortides(dades.access_token);
+                } else {
+                    document.getElementById('estat-carrega').innerHTML = "<span style='color:red'>❌ Error de credencials amb Strava.</span>";
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                document.getElementById('estat-carrega').innerHTML = "<span style='color:red'>❌ Error en connectar de manera local.</span>";
+            });
+        })();
+
+        function descarregarSortides(token) {
+            fetch('https://strava.com', {
+                headers: { 'Authorization': 'Bearer ' + token }
+            })
+            .then(res => res.json())
+            .then(activitats => {
+                const llista = document.getElementById('llista-activitats');
+                document.getElementById('estat-carrega').textContent = "Últimes sortides de ciclisme reals detectades:";
+                llista.innerHTML = "";
+
+                if (!activitats || activitats.length === 0) {
+                    llista.innerHTML = "<p>No s'han trobat rutes recents.</p>";
+                    return;
+                }
+
+                activitats.forEach(act => {
+                    if (act.type === 'Ride' || act.type === 'VirtualRide') {
+                        const distànciaKm = (act.distance / 1000).toFixed(2);
+                        const dataRuta = new Date(act.start_date_local).toLocaleDateString('ca-ES');
+                        
+                        const div = document.createElement('div');
+                        div.className = 'activitat';
+                        div.innerHTML = "<strong>🚴 " + act.name + "</strong><br>" +
+                                        "📅 Data: " + dataRuta + " | 📏 Distància: " + distànciaKm + " km | ⛰️ Desnivell: " + act.total_elevation_gain + "m";
+                        llista.appendChild(div);
+                    }
+                });
+            });
+        }
+    </script>
+</body>
+</html>
+
