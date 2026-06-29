@@ -1,91 +1,73 @@
 <!DOCTYPE html>
 <html lang="ca">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>El meu Panell de Ciclisme</title>
-    <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 20px; background-color: #f5f5f7; color: #333; }
-        .container { max-width: 600px; margin: 40px auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); text-align: center; }
-        h1 { color: #FC4C02; margin-bottom: 20px; }
-        p { color: #666; font-size: 1.1em; }
-        .activitat { background: #fafafa; border: 1px solid #eee; padding: 12px; margin: 10px 0; border-radius: 6px; text-align: left; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>El meu Panell de Ciclisme</title>
+<style>
+  body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 20px; background-color: #f5f5f7; color: #333; }
+  .container { max-width: 600px; margin: 40px auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); text-align: center; }
+  h1 { color: #FC4C02; margin-bottom: 20px; }
+  p { color: #666; font-size: 1.1em; }
+  .activitat { background: #fafafa; border: 1px solid #eee; padding: 12px; margin: 10px 0; border-radius: 6px; text-align: left; }
+  button { background: #FC4C02; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-size: 1em; cursor: pointer; margin-top: 10px; }
+  button:hover { background: #e0440a; }
+</style>
 </head>
 <body>
+<div class="container">
+  <h1>El meu Panell de Ciclisme</h1>
+  <p id="estat-carrega">Prem el botó per carregar les teves activitats.</p>
+  <button onclick="carregarActivitats()">🔄 Actualitza dades</button>
+  <div id="llista-activitats" style="margin-top: 20px;"></div>
+</div>
 
-    <div class="container">
-        <h1>El meu Panell de Ciclisme</h1>
-        <p id="estat-carrega">Iniciant connexió directa de dades d'activitat...</p>
-        
-        <!-- Zona de llistat de rutes -->
-        <div id="llista-activitats" style="margin-top: 20px;"></div>
-    </div>
+<script>
+// IMPORTANT: aquesta és l'única adreça que necessita la pàgina.
+// No hi ha cap clau secreta aquí — totes viuen al Worker de Cloudflare.
+const URL_BACKEND = "https://ciclisme-backend.patri-foster71.workers.dev";
 
-    <script>
-        // Credencials reals de l'aplicació
-        const CLIENT_ID = '261216';
-        const CLIENT_SECRET = '6ad27ecc4c089836d03ee867b3ed0ff3ededb62f';
-        const REFRESH_TOKEN_PERMANENT = 'f23f739bbbd184157ea7615dbf5240ecdd7607a9';
+function carregarActivitats() {
+  const estat = document.getElementById('estat-carrega');
+  const llista = document.getElementById('llista-activitats');
+  estat.textContent = "Carregant les teves sortides des de Strava...";
+  llista.innerHTML = "";
 
-        // Petició directa utilitzant la URL neta com exigeix el protocol de seguretat
-        const urlRefrescar = "https://strava.com" +
-                             "?client_id=" + CLIENT_ID +
-                             "&client_secret=" + CLIENT_SECRET +
-                             "&refresh_token=" + REFRESH_TOKEN_PERMANENT +
-                             "&grant_type=refresh_token";
+  fetch(URL_BACKEND)
+    .then(res => res.json())
+    .then(activitats => {
+      if (activitats.error) {
+        throw new Error(activitats.missatge || "Error desconegut");
+      }
 
-        // Executem la crida de fons de manera directa
-        fetch(urlRefrescar, { method: 'POST' })
-        .then(res => {
-            if (!res.ok) throw new Error("Error en refrescar la clau");
-            return res.json();
-        })
-        .then(dades => {
-            if (dades.access_token) {
-                document.getElementById('estat-carrega').textContent = "✓ Accés obtingut. Hola " + (dades.athlete ? dades.athlete.firstname : "Ciclista") + "! Carregant rutes...";
-                descarregarLesTevesSortides(dades.access_token);
-            } else {
-                throw new Error("Token buit");
-            }
-        })
-        .catch(err => {
-            console.error(err);
-            document.getElementById('estat-carrega').innerHTML = "<span style='color:red'>❌ Error en connectar amb Strava. Revisa que l'ordinador tingui Internet.</span>";
-        });
+      if (!activitats || activitats.length === 0) {
+        estat.textContent = "No s'han trobat activitats recents.";
+        return;
+      }
 
-        function descarregarLesTevesSortides(token) {
-            fetch('https://strava.com', {
-                headers: { 'Authorization': 'Bearer ' + token }
-            })
-            .then(res => res.json())
-            .then(activitats => {
-                const llista = document.getElementById('llista-activitats');
-                document.getElementById('estat-carrega').textContent = "Últimes sortides de ciclisme reals:";
-                llista.innerHTML = "";
+      estat.textContent = "Últimes sortides de ciclisme:";
 
-                if (!activitats || activitats.length === 0) {
-                    llista.innerHTML = "<p>No s'han trobat rutes recents en aquest compte.</p>";
-                    return;
-                }
-
-                activitats.forEach(act => {
-                    if (act.type === 'Ride' || act.type === 'VirtualRide') {
-                        const distànciaKm = (act.distance / 1000).toFixed(2);
-                        const dataRuta = new Date(act.start_date_local).toLocaleDateString('ca-ES');
-                        
-                        const div = document.createElement('div');
-                        div.className = 'activitat';
-                        div.innerHTML = "<strong>🚴 " + act.name + "</strong><br>" +
-                                        "📅 Data: " + dataRuta + " | 📏 Distància: " + distànciaKm + " km | ⛰️ Desnivell: " + act.total_elevation_gain + "m";
-                        llista.appendChild(div);
-                    }
-                });
-            })
-            .catch(err => {
-                document.getElementById('estat-carrega').innerHTML = "<span style='color:red'>❌ Error de descàrrega del llistat.</span>";
-            });
+      activitats.forEach(act => {
+        if (act.type === 'Ride' || act.type === 'VirtualRide') {
+          const distanciaKm = (act.distance / 1000).toFixed(2);
+          const dataRuta = new Date(act.start_date_local).toLocaleDateString('ca-ES');
+          const div = document.createElement('div');
+          div.className = 'activitat';
+          div.innerHTML =
+            "<strong>🚴 " + act.name + "</strong><br>" +
+            "📅 " + dataRuta +
+            " | 📏 " + distanciaKm + " km" +
+            " | ⛰️ " + act.total_elevation_gain + " m" +
+            (act.average_watts ? " | ⚡ " + Math.round(act.average_watts) + " W" : "");
+          llista.appendChild(div);
         }
-    </script>
+      });
+    })
+    .catch(err => {
+      console.error(err);
+      estat.innerHTML = "<span style='color:red'>❌ Error en carregar les dades: " + err.message + "</span>";
+    });
+}
+</script>
 </body>
 </html>
