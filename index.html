@@ -27,6 +27,12 @@
 // No hi ha cap clau secreta aquí — totes viuen al Worker de Cloudflare.
 const URL_BACKEND = "https://ciclisme-backend.patri-foster71.workers.dev";
 
+function formatTemps(segons) {
+  const h = Math.floor(segons / 3600);
+  const m = Math.round((segons % 3600) / 60);
+  return h > 0 ? h + "h " + m + "min" : m + "min";
+}
+
 function carregarActivitats() {
   const estat = document.getElementById('estat-carrega');
   const llista = document.getElementById('llista-activitats');
@@ -51,6 +57,8 @@ function carregarActivitats() {
         if (act.type === 'Ride' || act.type === 'VirtualRide') {
           const distanciaKm = (act.distance / 1000).toFixed(2);
           const dataRuta = new Date(act.start_date_local).toLocaleDateString('ca-ES');
+          const velocitatMitjana = act.average_speed ? (act.average_speed * 3.6).toFixed(1) : null;
+
           const div = document.createElement('div');
           div.className = 'activitat';
           div.innerHTML =
@@ -58,7 +66,13 @@ function carregarActivitats() {
             "📅 " + dataRuta +
             " | 📏 " + distanciaKm + " km" +
             " | ⛰️ " + act.total_elevation_gain + " m" +
-            (act.average_watts ? " | ⚡ " + Math.round(act.average_watts) + " W" : "");
+            (act.weighted_average_watts ? " | ⚡ " + Math.round(act.weighted_average_watts) + " W (ponderada)" : "") +
+            (act.suffer_score ? " | 💪 Esforç relatiu: " + act.suffer_score : "") +
+            (act.moving_time ? " | ⏱️ Temps en moviment: " + formatTemps(act.moving_time) : "") +
+            (velocitatMitjana ? " | 🚀 Vel. mitjana: " + velocitatMitjana + " km/h" : "") +
+            (act.average_cadence ? " | 🔄 Cadència mitjana: " + Math.round(act.average_cadence) + " rpm" : "") +
+            (act.average_heartrate ? " | ❤️ FC mitjana: " + Math.round(act.average_heartrate) + " bpm" : "") +
+            (act.max_heartrate ? " | ❤️‍🔥 FC màxima: " + Math.round(act.max_heartrate) + " bpm" : "");
           llista.appendChild(div);
         }
       });
