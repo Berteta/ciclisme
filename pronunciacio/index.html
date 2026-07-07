@@ -842,11 +842,16 @@ function renderManage(){
 
 function groupFilesByFolder(fileList){
   const groups = new Map();
+  const rootMedia = [];
   for (const file of fileList){
     const rel = file.webkitRelativePath || file.name;
     const parts = rel.split('/');
-    if (parts.length < 3) continue; // skip files sitting directly in the picked root folder
     if (parts.slice(0, -1).some(p => p.trim().toLowerCase() === 'no')) continue; // skip anything under a folder named "no"
+    if (parts.length < 3){
+      // sits directly in the picked root folder — offer it as its own single-item folder
+      if (file.type.startsWith('audio/') || file.type.startsWith('video/')) rootMedia.push(file);
+      continue;
+    }
     const groupKey = parts.slice(0, -1).join('/');
     if (!groups.has(groupKey)) groups.set(groupKey, { name: parts[parts.length - 2], files: [] });
     groups.get(groupKey).files.push(file);
@@ -860,7 +865,10 @@ function groupFilesByFolder(fileList){
     candidates.push({ key, name: group.name, media, pdf });
   }
   candidates.sort((a, b) => naturalCompare(a.name, b.name));
-  return candidates;
+  const videoCandidates = rootMedia
+    .map(file => ({ key: 'root:' + file.name, name: labelFromFilename(file.name), media: [file], pdf: null }))
+    .sort((a, b) => naturalCompare(a.name, b.name));
+  return videoCandidates.concat(candidates);
 }
 
 let pendingImportGroups = [];
@@ -870,22 +878,30 @@ function onDirectorySelected(e){
   pendingImportGroups = groups;
   const el = document.getElementById('importPreview');
   if (groups.length === 0){
-    el.innerHTML = '<p class="subtitle">No s\'ha trobat cap subcarpeta amb àudio o vídeo dins la carpeta triada.</p>';
+    el.innerHTML = '<p class="subtitle">No s\'ha trobat cap àudio o vídeo dins la carpeta triada.</p>';
     return;
   }
   el.innerHTML = `
-    <p class="subtitle" style="margin-top:14px;">Es crearan ${groups.length} carpetes noves:</p>
-    <ul style="margin:0 0 14px; padding-left:20px; font-size:14px; color:#6b6559;">
-      ${groups.map(g => `<li>${escapeHtml(g.name)} — ${g.media.length} arxius${g.pdf ? ', amb PDF' : ' (sense PDF)'}</li>`).join('')}
+    <p class="subtitle" style="margin-top:14px;">Marca les carpetes que vols crear (${groups.length} detectades):</p>
+    <ul style="margin:0 0 14px; padding-left:0; list-style:none; font-size:14px; color:#6b6559;">
+      ${groups.map((g,i) => `<li style="padding:4px 0;"><label><input type="checkbox" class="import-check" data-idx="${i}" checked> ${escapeHtml(g.name)} — ${g.media.length} arxiu${g.media.length!==1?'s':''}${g.pdf ? ', amb PDF' : ''}</label></li>`).join('')}
     </ul>
-    <button class="btn btn-brass" id="confirmImportBtn">Importa aquestes ${groups.length} carpetes</button>
+    <div style="display:flex; gap:8px;">
+      <button class="btn btn-outline" id="selectNoneBtn">Desmarca-ho tot</button>
+      <button class="btn btn-brass" id="confirmImportBtn">Importa les marcades</button>
+    </div>
   `;
+  document.getElementById('selectNoneBtn').onclick = () => {
+    document.querySelectorAll('.import-check').forEach(cb => cb.checked = false);
+  };
   document.getElementById('confirmImportBtn').onclick = onConfirmImport;
 }
 
 async function onConfirmImport(){
-  const groups = pendingImportGroups;
+  const checked = new Set(Array.from(document.querySelectorAll('.import-check:checked')).map(cb => parseInt(cb.dataset.idx, 10)));
+  const groups = pendingImportGroups.filter((g, i) => checked.has(i));
   const el = document.getElementById('importPreview');
+  if (groups.length === 0){ el.innerHTML = ''; return; }
   for (let i = 0; i < groups.length; i++){
     const g = groups[i];
     el.innerHTML = `<p class="subtitle">Important ${i + 1} de ${groups.length}: ${escapeHtml(g.name)}...</p>`;
