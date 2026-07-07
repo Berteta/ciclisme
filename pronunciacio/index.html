@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pronunciació — sessions diàries</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #EDE7DA;
+    --panel: #211F1A;
+    --panel-soft: #2A2823;
+    --teal: #2C4A47;
+    --brass: #B8863B;
+    --brass-bright: #D6A85C;
+    --rust: #A6432F;
+    --ink: #2A2724;
+    --cream: #F3EEE2;
+    --line: rgba(243,238,226,0.14);
+    --line-light: rgba(42,39,36,0.14);
+  }
+  *{ box-sizing: border-box; }
+  body{
+    margin:0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'IBM Plex Sans', sans-serif;
+    min-height:100vh;
+  }
+  .display{ font-family:'Fraunces', serif; }
+  .mono{ font-family:'IBM Plex Mono', monospace; }
+
+  .app{
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 28px 18px 60px;
+  }
+
+  /* ---- header ---- */
+  .eyebrow{
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--teal);
+    display:flex;
+    align-items:center;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+  .eyebrow::before{
+    content:"";
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--brass);
+    display:inline-block;
+  }
+  h1.title{
+    font-size: 30px;
+    font-weight: 600;
+    margin: 0 0 4px;
+    font-optical-sizing: auto;
+  }
+  .subtitle{
+    color: #6b6559;
+    font-size: 14px;
+    margin: 0 0 24px;
+  }
+
+  /* ---- console panel (the signature element) ---- */
+  .console{
+    background: var(--panel);
+    border-radius: 18px;
+    padding: 26px 22px 22px;
+    color: var(--cream);
+    box-shadow: 0 12px 32px rgba(33,31,26,0.22), inset 0 0 0 1px rgba(184,134,59,0.25);
+    position: relative;
+    overflow:hidden;
+  }
+  .console::before{
+    content:"";
+    position:absolute; inset:0;
+    background: repeating-linear-gradient(90deg, rgba(255,255,255,0.015) 0px, rgba(255,255,255,0.015) 1px, transparent 1px, transparent 6px);
+    pointer-events:none;
+  }
+  .console-top{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap: 16px;
+    position:relative;
+  }
+  .folder-name{
+    font-family:'Fraunces', serif;
+    font-size: 24px;
+    font-weight: 500;
+    margin: 0 0 2px;
+  }
+  .folder-meta{
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 11.5px;
+    color: rgba(243,238,226,0.55);
+    letter-spacing: 0.04em;
+  }
+
+  /* dial gauge */
+  .dial-wrap{ position:relative; width: 92px; height: 92px; flex-shrink:0; }
+  .dial-pct{
+    position:absolute; inset:0;
+    display:flex; align-items:center; justify-content:center;
+    flex-direction:column;
+    font-family:'IBM Plex Mono', monospace;
+  }
+  .dial-pct .num{ font-size: 20px; font-weight:500; color: var(--brass-bright); line-height:1; }
+  .dial-pct .lab{ font-size: 8px; letter-spacing:0.1em; color: rgba(243,238,226,0.45); margin-top:3px; }
+
+  .console-actions{
+    display:flex; gap: 10px; margin-top: 20px; position:relative; flex-wrap:wrap;
+  }
+  .btn{
+    font-family:'IBM Plex Sans', sans-serif;
+    font-size: 13.5px;
+    font-weight: 500;
+    border: none;
+    border-radius: 10px;
+    padding: 10px 16px;
+    cursor: pointer;
+    transition: transform 0.08s ease, filter 0.15s ease;
+  }
+  .btn:active{ transform: scale(0.97); }
+  .btn-brass{
+    background: var(--brass);
+    color: #201a0e;
+  }
+  .btn-brass:hover{ filter: brightness(1.08); }
+  .btn-ghost{
+    background: transparent;
+    color: var(--cream);
+    box-shadow: inset 0 0 0 1px rgba(243,238,226,0.3);
+  }
+  .btn-ghost:hover{ background: rgba(243,238,226,0.06); }
+  .btn-dark{
+    background: var(--ink);
+    color: var(--cream);
+  }
+  .btn-dark:hover{ filter: brightness(1.2); }
+  .btn-outline{
+    background: transparent;
+    color: var(--ink);
+    box-shadow: inset 0 0 0 1px var(--line-light);
+  }
+  .btn-outline:hover{ background: rgba(42,39,36,0.05); }
+  .btn-danger{
+    background: transparent;
+    color: var(--rust);
+    box-shadow: inset 0 0 0 1px rgba(166,67,47,0.4);
+  }
+  .btn:disabled{ opacity: 0.4; cursor: not-allowed; }
+
+  /* ---- word list ---- */
+  .word-panel{
+    margin-top: 22px;
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 1px 0 var(--line-light);
+    overflow: hidden;
+  }
+  .word-row{
+    display:flex;
+    align-items:center;
+    gap: 12px;
+    padding: 13px 16px;
+    border-bottom: 1px solid var(--line-light);
+  }
+  .word-row:last-child{ border-bottom:none; }
+  .play-btn{
+    width: 36px; height:36px;
+    border-radius: 50%;
+    border: none;
+    background: var(--bg);
+    color: var(--teal);
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer;
+    flex-shrink:0;
+    box-shadow: inset 0 0 0 1px var(--line-light);
+  }
+  .play-btn:hover{ background: var(--teal); color:#fff; }
+  .play-btn svg{ width:14px; height:14px; }
+  .word-label{
+    flex:1;
+    font-size: 15px;
+    min-width:0;
+    overflow-wrap:anywhere;
+  }
+  .word-label.mastered{ color: #8f8a7d; text-decoration: line-through; text-decoration-color: rgba(143,138,125,0.5); }
+  .master-toggle{
+    flex-shrink:0;
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing:0.05em;
+    padding: 7px 11px;
+    border-radius: 8px;
+    border: none;
+    cursor:pointer;
+    background: var(--bg);
+    color: #8f8a7d;
+    white-space:nowrap;
+  }
+  .master-toggle.on{
+    background: var(--teal);
+    color: #fff;
+  }
+
+  .footer-actions{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-top: 18px;
+    gap: 10px;
+  }
+  .link-btn{
+    background:none; border:none; cursor:pointer;
+    color: #6b6559;
+    font-size: 13px;
+    text-decoration: underline;
+    text-decoration-color: rgba(107,101,89,0.4);
+    padding: 4px;
+  }
+  .link-btn:hover{ color: var(--ink); }
+
+  /* ---- manage screen ---- */
+  .folder-card{
+    background:#fff;
+    border-radius: 14px;
+    padding: 15px 16px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom: 10px;
+    box-shadow: 0 1px 0 var(--line-light);
+  }
+  .folder-card .fname{ font-weight:500; font-size: 15px; }
+  .folder-card .fmeta{ font-family:'IBM Plex Mono', monospace; font-size: 11.5px; color:#948e80; margin-top:2px; }
+  .folder-card .actions{ display:flex; gap:6px; }
+  .icon-btn{
+    width:32px; height:32px; border-radius:8px; border:none; background:var(--bg);
+    display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--ink);
+  }
+  .icon-btn:hover{ background:#e2dccb; }
+
+  .empty-state{
+    text-align:center;
+    padding: 50px 20px;
+    color:#8f8a7d;
+  }
+  .empty-state .display{ font-size:20px; color: var(--ink); margin-bottom:6px; }
+
+  /* ---- form (new folder) ---- */
+  .field{ margin-bottom:16px; }
+  .field label{
+    display:block; font-size:12px; font-weight:500; letter-spacing:0.03em;
+    text-transform:uppercase; color:#6b6559; margin-bottom:6px;
+  }
+  .field input[type=text]{
+    width:100%;
+    padding: 11px 13px;
+    border-radius: 10px;
+    border: 1px solid var(--line-light);
+    font-size: 15px;
+    font-family:'IBM Plex Sans', sans-serif;
+    background:#fff;
+  }
+  .field input[type=text]:focus{ outline:2px solid var(--brass); outline-offset:1px; }
+  .upload-zone{
+    border: 1.5px dashed rgba(42,39,36,0.25);
+    border-radius: 12px;
+    padding: 22px;
+    text-align:center;
+    cursor:pointer;
+    background: #fff;
+  }
+  .upload-zone:hover{ background: #faf8f2; }
+  .upload-zone input{ display:none; }
+  .staged-word{
+    display:flex; align-items:center; gap:10px;
+    padding: 9px 12px;
+    background:#fff;
+    border-radius:10px;
+    margin-bottom:6px;
+  }
+  .staged-word input[type=text]{
+    flex:1; border:none; background:transparent; font-size:14px; padding:2px 0;
+  }
+  .staged-word input[type=text]:focus{ outline:none; border-bottom:1px solid var(--brass); }
+  .staged-word .rm{
+    background:none; border:none; color:#b6b0a0; cursor:pointer; font-size:16px; line-height:1; padding:2px 4px;
+  }
+  .staged-word .rm:hover{ color: var(--rust); }
+  .size-warn{
+    font-size:12.5px; color:var(--rust); margin-top:8px;
+  }
+  .top-nav{
+    display:flex; align-items:center; gap:10px; margin-bottom: 18px;
+  }
+  .back-btn{
+    background:none; border:none; cursor:pointer; color:#6b6559; font-size:20px; padding:4px 6px;
+  }
+  .back-btn:hover{ color:var(--ink); }
+  .toast{
+    position:fixed; bottom:22px; left:50%; transform:translateX(-50%);
+    background: var(--ink); color:var(--cream);
+    padding: 11px 18px; border-radius: 10px; font-size:13.5px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+    opacity:0; pointer-events:none;
+    transition: opacity 0.25s ease, transform 0.25s ease;
+    z-index: 50;
+  }
+  .toast.show{ opacity:1; transform:translateX(-50%) translateY(-4px); }
+  .loading{ text-align:center; padding:60px 20px; color:#8f8a7d; }
+</style>
+</head>
+<body>
+<div class="app" id="app"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ---------------- storage helpers (IndexedDB, local to this browser) ---------------- */
+const DB_NAME = 'pronunciacio-db';
+const STORE_NAME = 'kv';
+let dbPromise = null;
+
+function openDB(){
+  if (dbPromise) return dbPromise;
+  dbPromise = new Promise((resolve, reject)=>{
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)){
+        db.createObjectStore(STORE_NAME);
+      }
+    };
+    req.onsuccess = (e) => resolve(e.target.result);
+    req.onerror = (e) => reject(e.target.error);
+  });
+  return dbPromise;
+}
+
+async function storeGet(key){
+  try{
+    const db = await openDB();
+    return await new Promise((resolve, reject)=>{
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const req = tx.objectStore(STORE_NAME).get(key);
+      req.onsuccess = () => resolve(req.result != null ? req.result : null);
+      req.onerror = () => reject(req.error);
+    });
+  }catch(e){ return null; }
+}
+async function storeSet(key, valueObj){
+  const str = typeof valueObj === 'string' ? valueObj : JSON.stringify(valueObj);
+  try{
+    const db = await openDB();
+    await new Promise((resolve, reject)=>{
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      tx.objectStore(STORE_NAME).put(str, key);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    return true;
+  }catch(e){ console.error('storage set failed', e); return false; }
+}
+async function storeDelete(key){
+  try{
+    const db = await openDB();
+    await new Promise((resolve, reject)=>{
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      tx.objectStore(STORE_NAME).delete(key);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  }catch(e){}
+}
+
+/* ---------------- state ---------------- */
+let foldersIndex = [];      // [{id, name, wordCount, masteredCount}]
+let sessionState = { lastFolderId: null };
+let currentFolder = null;   // full folder object currently shown in practice view
+let view = 'loading';       // loading | practice | manage | newFolder | empty
+let stagedWords = [];       // for new-folder form: [{id, label, audio}]
+let stagedName = '';
+
+function uid(){ return Math.random().toString(36).slice(2,10) + Date.now().toString(36); }
+
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(()=> t.classList.remove('show'), 2200);
+}
+
+/* ---------------- data layer ---------------- */
+async function loadIndex(){
+  const raw = await storeGet('folders-index');
+  foldersIndex = raw ? JSON.parse(raw) : [];
+  const s = await storeGet('session-state');
+  sessionState = s ? JSON.parse(s) : { lastFolderId: null };
+}
+
+async function saveIndex(){
+  await storeSet('folders-index', foldersIndex);
+}
+
+async function loadFolder(id){
+  const raw = await storeGet('folder:' + id);
+  return raw ? JSON.parse(raw) : null;
+}
+
+async function saveFolder(folder){
+  const str = JSON.stringify(folder);
+  const sizeMB = new Blob([str]).size / (1024*1024);
+  if (sizeMB > 150){
+    showToast('Aquesta carpeta és molt gran (' + sizeMB.toFixed(0) + ' MB). Considera dividir-la en dues carpetes més petites.');
+    return false;
+  }
+  const ok = await storeSet('folder:' + folder.id, str);
+  if (!ok){
+    showToast('No s\'ha pogut desar — potser el navegador s\'ha quedat sense espai.');
+  }
+  return ok;
+}
+
+function recomputeIndexEntry(folder){
+  const idx = foldersIndex.find(f => f.id === folder.id);
+  const masteredCount = folder.words.filter(w => w.mastered).length;
+  if (idx){
+    idx.name = folder.name;
+    idx.wordCount = folder.words.length;
+    idx.masteredCount = masteredCount;
+  }
+}
+
+function pickRandomFolder(excludeId){
+  const pool = foldersIndex.filter(f => f.wordCount > 0);
+  if (pool.length === 0) return null;
+  let candidates = pool.filter(f => f.id !== excludeId);
+  if (candidates.length === 0) candidates = pool; // only one folder exists
+  return candidates[Math.floor(Math.random() * candidates.length)];
+}
+
+/* ---------------- rendering ---------------- */
+const appEl = document.getElementById('app');
+
+function render(){
+  if (view === 'loading') return renderLoading();
+  if (view === 'empty') return renderEmpty();
+  if (view === 'practice') return renderPractice();
+  if (view === 'manage') return renderManage();
+  if (view === 'newFolder') return renderNewFolder();
+}
+
+function renderLoading(){
+  appEl.innerHTML = '<div class="loading">Carregant...</div>';
+}
+
+function renderEmpty(){
+  appEl.innerHTML = `
+    <div class="eyebrow">Pronunciació</div>
+    <h1 class="title display">Sessions diàries</h1>
+    <p class="subtitle">Encara no tens cap carpeta desada.</p>
+    <div class="empty-state">
+      <div class="display">Comencem</div>
+      <p>Puja les carpetes amb els teus àudios i llistes de paraules per començar a practicar.</p>
+      <button class="btn btn-brass" id="goNewFolder" style="margin-top:14px;">+ Crea la primera carpeta</button>
+    </div>
+  `;
+  document.getElementById('goNewFolder').onclick = () => { stagedWords = []; stagedName=''; view='newFolder'; render(); };
+}
+
+function renderPractice(){
+  const f = currentFolder;
+  const total = f.words.length;
+  const mastered = f.words.filter(w => w.mastered).length;
+  const pct = total ? Math.round((mastered/total)*100) : 0;
+  const circumference = 2 * Math.PI * 34;
+  const dash = circumference * (pct/100);
+
+  appEl.innerHTML = `
+    <div class="eyebrow">Pronunciació — sessió d'avui</div>
+    <h1 class="title display">A practicar</h1>
+    <p class="subtitle">${foldersIndex.length} carpeta${foldersIndex.length!==1?'s':''} en total</p>
+
+    <div class="console">
+      <div class="console-top">
+        <div>
+          <div class="folder-name">${escapeHtml(f.name)}</div>
+          <div class="folder-meta">${mastered} / ${total} DOMINADES</div>
+        </div>
+        <div class="dial-wrap">
+          <svg viewBox="0 0 80 80" width="92" height="92">
+            <circle cx="40" cy="40" r="34" fill="none" stroke="rgba(243,238,226,0.15)" stroke-width="7"/>
+            <circle cx="40" cy="40" r="34" fill="none" stroke="#B8863B" stroke-width="7"
+              stroke-dasharray="${dash} ${circumference}" stroke-linecap="round"
+              transform="rotate(-90 40 40)"/>
+          </svg>
+          <div class="dial-pct">
+            <div class="num">${pct}%</div>
+            <div class="lab">FET</div>
+          </div>
+        </div>
+      </div>
+      <div class="console-actions">
+        <button class="btn btn-brass" id="shuffleBtn">🔀 Una altra carpeta a l'atzar</button>
+        <button class="btn btn-ghost" id="manageBtn">Gestiona carpetes</button>
+      </div>
+    </div>
+
+    <div class="word-panel">
+      ${f.words.map(w => `
+        <div class="word-row" data-id="${w.id}">
+          <button class="play-btn" data-play="${w.id}" title="Reprodueix">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+          </button>
+          <div class="word-label ${w.mastered?'mastered':''}">${escapeHtml(w.label)}</div>
+          <button class="master-toggle ${w.mastered?'on':''}" data-toggle="${w.id}">
+            ${w.mastered ? '✓ DOMINADA' : 'PER REPASSAR'}
+          </button>
+        </div>
+      `).join('')}
+    </div>
+  `;
+
+  document.getElementById('shuffleBtn').onclick = onShuffle;
+  document.getElementById('manageBtn').onclick = () => { view='manage'; render(); };
+  appEl.querySelectorAll('[data-play]').forEach(btn=>{
+    btn.onclick = () => {
+      const w = f.words.find(x => x.id === btn.dataset.play);
+      if (w && w.audio){
+        const audio = new Audio(w.audio);
+        audio.play().catch(()=> showToast('No s\'ha pogut reproduir l\'àudio.'));
+      }
+    };
+  });
+  appEl.querySelectorAll('[data-toggle]').forEach(btn=>{
+    btn.onclick = async () => {
+      const w = f.words.find(x => x.id === btn.dataset.toggle);
+      w.mastered = !w.mastered;
+      recomputeIndexEntry(f);
+      render();
+      await saveFolder(f);
+      await saveIndex();
+    };
+  });
+}
+
+async function onShuffle(){
+  const next = pickRandomFolder(currentFolder ? currentFolder.id : sessionState.lastFolderId);
+  if (!next){ view='empty'; render(); return; }
+  view='loading'; render();
+  const folder = await loadFolder(next.id);
+  currentFolder = folder;
+  sessionState.lastFolderId = folder.id;
+  await storeSet('session-state', sessionState);
+  view='practice'; render();
+}
+
+function renderManage(){
+  appEl.innerHTML = `
+    <div class="top-nav">
+      <button class="back-btn" id="backBtn">←</button>
+      <div class="eyebrow" style="margin:0;">Gestiona</div>
+    </div>
+    <h1 class="title display">Les teves carpetes</h1>
+    <p class="subtitle">${foldersIndex.length} carpeta${foldersIndex.length!==1?'s':''} desada${foldersIndex.length!==1?'es':''}</p>
+    <div id="folderList"></div>
+    <button class="btn btn-brass" id="addFolderBtn" style="margin-top:6px;">+ Nova carpeta</button>
+  `;
+  const list = document.getElementById('folderList');
+  if (foldersIndex.length === 0){
+    list.innerHTML = '<div class="empty-state">Encara no hi ha cap carpeta.</div>';
+  } else {
+    list.innerHTML = foldersIndex.map(f => `
+      <div class="folder-card" data-id="${f.id}">
+        <div>
+          <div class="fname">${escapeHtml(f.name)}</div>
+          <div class="fmeta">${f.wordCount} paraules · ${f.masteredCount}/${f.wordCount} dominades</div>
+        </div>
+        <div class="actions">
+          <button class="icon-btn" data-practice="${f.id}" title="Practica aquesta">▶</button>
+          <button class="icon-btn" data-del="${f.id}" title="Esborra">🗑</button>
+        </div>
+      </div>
+    `).join('');
+    list.querySelectorAll('[data-practice]').forEach(btn=>{
+      btn.onclick = async () => {
+        view='loading'; render();
+        currentFolder = await loadFolder(btn.dataset.practice);
+        sessionState.lastFolderId = currentFolder.id;
+        await storeSet('session-state', sessionState);
+        view='practice'; render();
+      };
+    });
+    list.querySelectorAll('[data-del]').forEach(btn=>{
+      btn.onclick = async () => {
+        if (!confirm('Segur que vols esborrar aquesta carpeta i tots els seus àudios?')) return;
+        const id = btn.dataset.del;
+        foldersIndex = foldersIndex.filter(f => f.id !== id);
+        await saveIndex();
+        await storeDelete('folder:' + id);
+        if (currentFolder && currentFolder.id === id) currentFolder = null;
+        if (foldersIndex.length === 0){ view='empty'; render(); return; }
+        renderManage();
+      };
+    });
+  }
+  document.getElementById('backBtn').onclick = async () => {
+    if (currentFolder){ view='practice'; render(); }
+    else { await onShuffle(); }
+  };
+  document.getElementById('addFolderBtn').onclick = () => { stagedWords=[]; stagedName=''; view='newFolder'; render(); };
+}
+
+function renderNewFolder(){
+  appEl.innerHTML = `
+    <div class="top-nav">
+      <button class="back-btn" id="backBtn">←</button>
+      <div class="eyebrow" style="margin:0;">Nova carpeta</div>
+    </div>
+    <h1 class="title display">Puja una carpeta</h1>
+    <p class="subtitle">El nom de cada fitxer es converteix en el text de la paraula o frase — pots editar-lo després.</p>
+
+    <div class="field">
+      <label>Nom de la carpeta</label>
+      <input type="text" id="folderNameInput" placeholder="p. ex. Sons TH i R" value="${escapeHtml(stagedName)}">
+    </div>
+
+    <div class="field">
+      <label>Arxius d'àudio</label>
+      <div class="upload-zone" id="uploadZone">
+        <input type="file" id="audioInput" accept="audio/*" multiple>
+        📂 Toca per triar tots els àudios d'aquesta carpeta
+      </div>
+    </div>
+
+    <div id="stagedList"></div>
+    <div id="sizeWarn"></div>
+
+    <div class="footer-actions">
+      <button class="btn btn-outline" id="cancelBtn">Cancel·la</button>
+      <button class="btn btn-brass" id="saveFolderBtn">Desa carpeta</button>
+    </div>
+  `;
+
+  document.getElementById('backBtn').onclick = () => { view = foldersIndex.length ? 'manage' : 'empty'; render(); };
+  document.getElementById('cancelBtn').onclick = () => { view = foldersIndex.length ? 'manage' : 'empty'; render(); };
+  document.getElementById('folderNameInput').oninput = (e) => { stagedName = e.target.value; };
+  document.getElementById('uploadZone').onclick = () => document.getElementById('audioInput').click();
+  document.getElementById('audioInput').onchange = handleFilesStaged;
+  document.getElementById('saveFolderBtn').onclick = onSaveNewFolder;
+
+  renderStagedList();
+}
+
+function labelFromFilename(name){
+  const base = name.replace(/\.[^/.]+$/, '');
+  return base.replace(/[_-]+/g, ' ').trim();
+}
+
+async function handleFilesStaged(e){
+  const files = Array.from(e.target.files);
+  for (const file of files){
+    const dataUrl = await new Promise((res, rej)=>{
+      const r = new FileReader();
+      r.onload = () => res(r.result);
+      r.onerror = rej;
+      r.readAsDataURL(file);
+    });
+    stagedWords.push({ id: uid(), label: labelFromFilename(file.name), audio: dataUrl, mastered: false });
+  }
+  renderStagedList();
+}
+
+function renderStagedList(){
+  const el = document.getElementById('stagedList');
+  if (!el) return;
+  if (stagedWords.length === 0){
+    el.innerHTML = '';
+  } else {
+    el.innerHTML = stagedWords.map(w => `
+      <div class="staged-word" data-id="${w.id}">
+        <input type="text" value="${escapeHtml(w.label)}" data-label="${w.id}">
+        <button class="rm" data-rm="${w.id}">✕</button>
+      </div>
+    `).join('');
+    el.querySelectorAll('[data-label]').forEach(inp=>{
+      inp.oninput = () => {
+        const w = stagedWords.find(x=>x.id===inp.dataset.label);
+        if (w) w.label = inp.value;
+      };
+    });
+    el.querySelectorAll('[data-rm]').forEach(btn=>{
+      btn.onclick = () => {
+        stagedWords = stagedWords.filter(x=>x.id!==btn.dataset.rm);
+        renderStagedList();
+      };
+    });
+  }
+  const totalSize = stagedWords.reduce((sum,w)=> sum + w.audio.length, 0);
+  const sizeMB = totalSize / (1024*1024);
+  const warnEl = document.getElementById('sizeWarn');
+  if (warnEl){
+    warnEl.innerHTML = sizeMB > 80 ? `<div class="size-warn">Aquesta carpeta ja pesa ${sizeMB.toFixed(0)} MB — si es fa massa grossa, considera dividir-la en dues carpetes.</div>` : '';
+  }
+}
+
+async function onSaveNewFolder(){
+  const name = stagedName.trim();
+  if (!name){ showToast('Posa un nom a la carpeta.'); return; }
+  if (stagedWords.length === 0){ showToast('Puja almenys un arxiu d\'àudio.'); return; }
+  const id = uid();
+  const folder = { id, name, words: stagedWords };
+  const ok = await saveFolder(folder);
+  if (!ok) return;
+  foldersIndex.push({ id, name, wordCount: folder.words.length, masteredCount: 0 });
+  await saveIndex();
+  showToast('Carpeta desada.');
+  stagedWords = []; stagedName = '';
+  currentFolder = folder;
+  sessionState.lastFolderId = id;
+  await storeSet('session-state', sessionState);
+  view = 'practice';
+  render();
+}
+
+function escapeHtml(str){
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+/* ---------------- boot ---------------- */
+async function boot(){
+  view = 'loading'; render();
+  await loadIndex();
+  if (foldersIndex.length === 0){
+    view = 'empty'; render();
+    return;
+  }
+  const pick = pickRandomFolder(sessionState.lastFolderId);
+  currentFolder = await loadFolder(pick.id);
+  sessionState.lastFolderId = pick.id;
+  await storeSet('session-state', sessionState);
+  view = 'practice';
+  render();
+}
+
+boot();
+</script>
+</body>
+</html>
