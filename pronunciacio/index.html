@@ -402,6 +402,22 @@ let lastStorageError = null;
 function uid(){ return Math.random().toString(36).slice(2,10) + Date.now().toString(36); }
 function naturalCompare(a, b){ return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }); }
 
+function rejoinLetters(text){
+  const tokens = text.split(/\s+/).filter(Boolean);
+  const words = [];
+  let buffer = '';
+  for (const tok of tokens){
+    if (tok.length === 1){
+      buffer += tok;
+    } else {
+      if (buffer){ words.push(buffer); buffer = ''; }
+      words.push(tok);
+    }
+  }
+  if (buffer) words.push(buffer);
+  return words.join(' ');
+}
+
 function showToast(msg){
   const t = document.getElementById('toast');
   t.textContent = msg;
@@ -727,8 +743,8 @@ async function onFillFromPdf(){
     for (let i = 1; i <= pdf.numPages; i++){
       const page = await pdf.getPage(i);
       const content = await page.getTextContent();
-      const text = content.items.map(it => it.str).join(' ').replace(/\s+/g, ' ').trim();
-      pageTexts.push(text);
+      const raw = content.items.map(it => it.str).join(' ').replace(/\s+/g, ' ').trim();
+      pageTexts.push(rejoinLetters(raw));
     }
     const ordered = [...stagedWords].sort((a, b) => naturalCompare(a.filename, b.filename));
     const n = Math.min(ordered.length, pageTexts.length);
