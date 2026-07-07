@@ -382,6 +382,18 @@ async function storeSet(key, valueObj){
     return true;
   }catch(e){ console.error('storage set failed', e); lastStorageError = e; return false; }
 }
+async function storeSetBlob(key, blob){
+  try{
+    const db = await openDB();
+    await new Promise((resolve, reject)=>{
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      tx.objectStore(STORE_NAME).put(blob, key);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    return true;
+  }catch(e){ console.error('storage set blob failed', e); lastStorageError = e; return false; }
+}
 async function storeDelete(key){
   try{
     const db = await openDB();
@@ -499,38 +511,81 @@ async function saveIndex(){
 
 async function loadFolder(id){
   const raw = await storeGet('folder:' + id);
-  return raw ? JSON.parse(raw) : null;
+  if (!raw) return null;
+  const folder = JSON.parse(raw);
+  for (const w of folder.words){
+    // Folders saved before the blob-storage change embed the audio as a
+    // data: URL right in the JSON — keep those working as-is.
+    if (w.audio && typeof w.audio === 'string' && w.audio.startsWith('data:')) continue;
+    const blob = await storeGet('media:' + w.id);
+    w.audio = blob ? URL.createObjectURL(blob) : null;
+  }
+  return folder;
 }
 
-async function saveFolder(folder){
-  const str = JSON.stringify(folder);
-  const sizeMB = new Blob([str]).size / (1024*1024);
-  if (sizeMB > 150){
-    showToast('Aquesta carpeta és molt gran (' + sizeMB.toFixed(0) + ' MB). Considera dividir-la en dues carpetes més petites.');
-    return false;
+function revokeFolderUrls(folder){
+  if (!folder) return;
+  for (const w of folder.words){
+    if (w.audio && w.audio.startsWith('blob:')) URL.revokeObjectURL(w.audio);
   }
+}
+
+async function showStorageFailureAlert(sizeMB){
+  let lines = ['No s\'ha pogut desar.', ''];
+  lines.push('Mida: ' + sizeMB.toFixed(1) + ' MB');
+  if (lastStorageError){
+    lines.push('Error tècnic: ' + (lastStorageError.name || '') + ' — ' + (lastStorageError.message || lastStorageError));
+  }
+  try{
+    if (navigator.storage && navigator.storage.estimate){
+      const est = await navigator.storage.estimate();
+      lines.push('Espai fet servir pel navegador: ' + ((est.usage||0)/1024/1024).toFixed(1) + ' MB');
+      lines.push('Espai total disponible: ' + ((est.quota||0)/1024/1024).toFixed(1) + ' MB');
+    } else {
+      lines.push('(Aquest navegador no permet consultar l\'espai disponible.)');
+    }
+  }catch(e){ lines.push('(No s\'ha pogut consultar l\'espai disponible: ' + e.message + ')'); }
+  lines.push('');
+  lines.push('Origen de la pàgina: ' + location.href);
+  alert(lines.join('\n'));
+  showToast('No s\'ha pogut desar — mira la finestra emergent per als detalls.');
+}
+
+async function saveFolderMeta(folder){
+  const meta = {
+    id: folder.id,
+    name: folder.name,
+    words: folder.words.map(w => {
+      const meta = { id: w.id, filename: w.filename, label: w.label, mediaType: w.mediaType, mastered: !!w.mastered };
+      // Preserve old-format embedded audio so pre-existing folders keep working.
+      if (w.audio && typeof w.audio === 'string' && w.audio.startsWith('data:')) meta.audio = w.audio;
+      return meta;
+    })
+  };
+  const str = JSON.stringify(meta);
   const ok = await storeSet('folder:' + folder.id, str);
   if (!ok){
-    let lines = ['No s\'ha pogut desar la carpeta.', ''];
-    lines.push('Mida d\'aquesta carpeta: ' + sizeMB.toFixed(1) + ' MB');
-    if (lastStorageError){
-      lines.push('Error tècnic: ' + (lastStorageError.name || '') + ' — ' + (lastStorageError.message || lastStorageError));
-    }
-    try{
-      if (navigator.storage && navigator.storage.estimate){
-        const est = await navigator.storage.estimate();
-        lines.push('Espai fet servir pel navegador: ' + ((est.usage||0)/1024/1024).toFixed(1) + ' MB');
-        lines.push('Espai total disponible: ' + ((est.quota||0)/1024/1024).toFixed(1) + ' MB');
-      } else {
-        lines.push('(Aquest navegador no permet consultar l\'espai disponible.)');
-      }
-    }catch(e){ lines.push('(No s\'ha pogut consultar l\'espai disponible: ' + e.message + ')'); }
-    lines.push('');
-    lines.push('Origen de la pàgina: ' + location.href);
-    alert(lines.join('\n'));
-    showToast('No s\'ha pogut desar — mira la finestra emergent per als detalls.');
+    await showStorageFailureAlert(new Blob([str]).size / (1024*1024));
   }
   return ok;
+}
+
+async function saveNewFolderWithMedia(id, name, stagedWordsList){
+  const totalMB = stagedWordsList.reduce((sum,w)=> sum + (w.blob ? w.blob.size : 0), 0) / (1024*1024);
+  if (totalMB > 2000){
+    showToast('Aquesta carpeta pesa ' + totalMB.toFixed(0) + ' MB — massa gran. Considera dividir-la en dues carpetes.');
+    return false;
+  }
+  for (const w of stagedWordsList){
+    if (w.blob){
+      const ok = await storeSetBlob('media:' + w.id, w.blob);
+      if (!ok){
+        await showStorageFailureAlert(totalMB);
+        return false;
+      }
+    }
+  }
+  return await saveFolderMeta({ id, name, words: stagedWordsList });
 }
 
 function recomputeIndexEntry(folder){
@@ -680,7 +735,7 @@ function renderPractice(){
       w.mastered = !w.mastered;
       recomputeIndexEntry(f);
       render();
-      await saveFolder(f);
+      await saveFolderMeta(f);
       await saveIndex();
     };
   });
@@ -692,6 +747,7 @@ async function onShuffle(){
   if (!next){ view='empty'; render(); return; }
   view='loading'; render();
   const folder = await loadFolder(next.id);
+  revokeFolderUrls(currentFolder);
   currentFolder = folder;
   sessionState.lastFolderId = folder.id;
   await storeSet('session-state', sessionState);
@@ -728,7 +784,9 @@ function renderManage(){
     list.querySelectorAll('[data-practice]').forEach(btn=>{
       btn.onclick = async () => {
         view='loading'; render();
-        currentFolder = await loadFolder(btn.dataset.practice);
+        const folder = await loadFolder(btn.dataset.practice);
+        revokeFolderUrls(currentFolder);
+        currentFolder = folder;
         sessionState.lastFolderId = currentFolder.id;
         await storeSet('session-state', sessionState);
         view='practice'; render();
@@ -736,12 +794,17 @@ function renderManage(){
     });
     list.querySelectorAll('[data-del]').forEach(btn=>{
       btn.onclick = async () => {
-        if (!confirm('Segur que vols esborrar aquesta carpeta i tots els seus àudios?')) return;
+        if (!confirm('Segur que vols esborrar aquesta carpeta i tots els seus arxius?')) return;
         const id = btn.dataset.del;
+        const raw = await storeGet('folder:' + id);
+        if (raw){
+          const parsed = JSON.parse(raw);
+          for (const w of parsed.words){ await storeDelete('media:' + w.id); }
+        }
         foldersIndex = foldersIndex.filter(f => f.id !== id);
         await saveIndex();
         await storeDelete('folder:' + id);
-        if (currentFolder && currentFolder.id === id) currentFolder = null;
+        if (currentFolder && currentFolder.id === id){ revokeFolderUrls(currentFolder); currentFolder = null; }
         if (foldersIndex.length === 0){ view='empty'; render(); return; }
         renderManage();
       };
@@ -863,17 +926,11 @@ function labelFromFilename(name){
   return base.replace(/[_-]+/g, ' ').trim();
 }
 
-async function handleFilesStaged(e){
+function handleFilesStaged(e){
   const files = Array.from(e.target.files);
   for (const file of files){
-    const dataUrl = await new Promise((res, rej)=>{
-      const r = new FileReader();
-      r.onload = () => res(r.result);
-      r.onerror = rej;
-      r.readAsDataURL(file);
-    });
     const mediaType = file.type.startsWith('video/') ? 'video' : 'audio';
-    stagedWords.push({ id: uid(), filename: file.name, label: labelFromFilename(file.name), audio: dataUrl, mediaType, mastered: false });
+    stagedWords.push({ id: uid(), filename: file.name, label: labelFromFilename(file.name), blob: file, mediaType, mastered: false });
   }
   renderStagedList();
   renderPdfZone();
@@ -905,28 +962,30 @@ function renderStagedList(){
       };
     });
   }
-  const totalSize = stagedWords.reduce((sum,w)=> sum + w.audio.length, 0);
+  const totalSize = stagedWords.reduce((sum,w)=> sum + (w.blob ? w.blob.size : 0), 0);
   const sizeMB = totalSize / (1024*1024);
   const warnEl = document.getElementById('sizeWarn');
   if (warnEl){
-    warnEl.innerHTML = sizeMB > 80 ? `<div class="size-warn">Aquesta carpeta ja pesa ${sizeMB.toFixed(0)} MB — si es fa massa grossa, considera dividir-la en dues carpetes.</div>` : '';
+    warnEl.innerHTML = sizeMB > 500 ? `<div class="size-warn">Aquesta carpeta ja pesa ${sizeMB.toFixed(0)} MB — si es fa massa grossa, considera dividir-la en dues carpetes.</div>` : '';
   }
 }
 
 async function onSaveNewFolder(){
   const name = stagedName.trim();
   if (!name){ showToast('Posa un nom a la carpeta.'); return; }
-  if (stagedWords.length === 0){ showToast('Puja almenys un arxiu d\'àudio.'); return; }
+  if (stagedWords.length === 0){ showToast('Puja almenys un arxiu d\'àudio o vídeo.'); return; }
   const id = uid();
   const orderedWords = [...stagedWords].sort((a, b) => naturalCompare(a.filename, b.filename));
-  const folder = { id, name, words: orderedWords };
-  const ok = await saveFolder(folder);
+  showToast('Desant...');
+  const ok = await saveNewFolderWithMedia(id, name, orderedWords);
   if (!ok) return;
-  foldersIndex.push({ id, name, wordCount: folder.words.length, masteredCount: 0 });
+  foldersIndex.push({ id, name, wordCount: orderedWords.length, masteredCount: 0 });
   await saveIndex();
   showToast('Carpeta desada.');
   stagedWords = []; stagedName = ''; stagedPdfFile = null;
-  currentFolder = folder;
+  revokeFolderUrls(currentFolder);
+  orderedWords.forEach(w => { w.audio = w.blob ? URL.createObjectURL(w.blob) : null; });
+  currentFolder = { id, name, words: orderedWords };
   sessionState.lastFolderId = id;
   await storeSet('session-state', sessionState);
   view = 'practice';
