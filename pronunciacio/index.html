@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="words-en.js"></script>
 <script>
   if (window.pdfjsLib){
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
@@ -406,34 +407,52 @@ function leadingNumber(filename){
   return m ? parseInt(m[1], 10) : null;
 }
 
-const SHORT_ENGLISH_WORDS = new Set([
-  'am','an','as','at','be','by','do','go','he','if','in','is','it','me','my','no','of','on','or','ok','so','to','up','us','we',
-  'ah','eh','hi','ha','ma','pa','ox'
-]);
+function wordCore(tok){ return tok.replace(/^[^a-zA-Z]+|[^a-zA-Z]+$/g, ''); }
 
-function isRealShortWord(core){
-  if (core.length === 1) return core === 'I' || core === 'a' || core === 'A';
-  return SHORT_ENGLISH_WORDS.has(core.toLowerCase());
+function isKnownWord(core){
+  if (!core) return false;
+  if (core.length === 1) return core === 'I' || core.toLowerCase() === 'a';
+  const dict = window.EN_DICTIONARY;
+  return !!dict && dict.has(core.toLowerCase());
 }
 
 function rejoinLetters(text){
   const tokens = text.split(/\s+/).filter(Boolean);
   const words = [];
-  let buffer = '';
-  for (const tok of tokens){
-    const core = tok.replace(/^[^a-zA-Z]+|[^a-zA-Z]+$/g, '');
-    const isFragment = core.length > 0 && core.length <= 2 && !isRealShortWord(core);
-    if (isFragment){
-      buffer += tok;
-    } else if (buffer.length > 0 && buffer.length < 4){
-      words.push(buffer + tok);
-      buffer = '';
-    } else {
-      if (buffer){ words.push(buffer); buffer = ''; }
-      words.push(tok);
+  let i = 0;
+  while (i < tokens.length){
+    const core = wordCore(tokens[i]);
+    if (!core || isKnownWord(core)){
+      words.push(tokens[i]);
+      i++;
+      continue;
     }
+    // Suspected spurious split: try extending forward, one token at a time,
+    // until the combined text forms a real word.
+    let merged = tokens[i];
+    let matchedAt = -1;
+    for (let j = i + 1; j < tokens.length && j < i + 8; j++){
+      merged += tokens[j];
+      if (isKnownWord(wordCore(merged))){ matchedAt = j; break; }
+    }
+    if (matchedAt !== -1){
+      words.push(merged);
+      i = matchedAt + 1;
+      continue;
+    }
+    // Forward extension failed: try attaching to the previously pushed word instead.
+    if (words.length > 0){
+      const candidate = words[words.length - 1] + tokens[i];
+      if (isKnownWord(wordCore(candidate))){
+        words[words.length - 1] = candidate;
+        i++;
+        continue;
+      }
+    }
+    // Nothing validated: keep the fragment as-is rather than guessing wrong.
+    words.push(tokens[i]);
+    i++;
   }
-  if (buffer) words.push(buffer);
   return words.join(' ');
 }
 
