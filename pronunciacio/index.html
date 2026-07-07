@@ -845,7 +845,8 @@ function groupFilesByFolder(fileList){
   for (const file of fileList){
     const rel = file.webkitRelativePath || file.name;
     const parts = rel.split('/');
-    if (parts.length < 2) continue;
+    if (parts.length < 3) continue; // skip files sitting directly in the picked root folder
+    if (parts.slice(0, -1).some(p => p.trim().toLowerCase() === 'no')) continue; // skip anything under a folder named "no"
     const groupKey = parts.slice(0, -1).join('/');
     if (!groups.has(groupKey)) groups.set(groupKey, { name: parts[parts.length - 2], files: [] });
     groups.get(groupKey).files.push(file);
@@ -855,7 +856,7 @@ function groupFilesByFolder(fileList){
     const media = group.files.filter(f => f.type.startsWith('audio/') || f.type.startsWith('video/'));
     if (media.length === 0) continue;
     const pdfs = group.files.filter(f => f.type === 'application/pdf' || /\.pdf$/i.test(f.name));
-    const pdf = pdfs.find(f => /practice/i.test(f.name)) || pdfs[0] || null;
+    const pdf = pdfs.find(f => /practice/i.test(f.name)) || (pdfs.length === 1 ? pdfs[0] : null);
     candidates.push({ key, name: group.name, media, pdf });
   }
   candidates.sort((a, b) => naturalCompare(a.name, b.name));
