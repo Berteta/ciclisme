@@ -401,6 +401,10 @@ let stagedPdfFile = null;   // raw File for the transcriptions PDF, if chosen
 let lastStorageError = null;
 function uid(){ return Math.random().toString(36).slice(2,10) + Date.now().toString(36); }
 function naturalCompare(a, b){ return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }); }
+function leadingNumber(filename){
+  const m = filename.match(/^(\d+)/);
+  return m ? parseInt(m[1], 10) : null;
+}
 
 function rejoinLetters(text){
   const tokens = text.split(/\s+/).filter(Boolean);
@@ -746,16 +750,23 @@ async function onFillFromPdf(){
       const raw = content.items.map(it => it.str).join(' ').replace(/\s+/g, ' ').trim();
       pageTexts.push(rejoinLetters(raw));
     }
-    const ordered = [...stagedWords].sort((a, b) => naturalCompare(a.filename, b.filename));
-    const n = Math.min(ordered.length, pageTexts.length);
-    for (let i = 0; i < n; i++){
-      if (pageTexts[i]) ordered[i].label = pageTexts[i];
+    let filled = 0;
+    let missingNumber = 0;
+    for (const w of stagedWords){
+      const pageNum = leadingNumber(w.filename);
+      if (pageNum === null){ missingNumber++; continue; }
+      if (pageNum >= 1 && pageNum <= pageTexts.length && pageTexts[pageNum - 1]){
+        w.label = pageTexts[pageNum - 1];
+        filled++;
+      }
     }
     renderStagedList();
-    if (pageTexts.length === ordered.length){
-      showToast(`Transcripcions omplertes (${n} de ${n}).`);
+    if (filled === stagedWords.length){
+      showToast(`Transcripcions omplertes (${filled} de ${stagedWords.length}).`);
+    } else if (missingNumber > 0){
+      showToast(`${missingNumber} arxiu(s) no comencen per un número — s'han omplert ${filled} de ${stagedWords.length}, revisa la resta.`);
     } else {
-      showToast(`El PDF té ${pageTexts.length} pàgines i hi ha ${ordered.length} àudios — s'han omplert ${n}, revisa la resta.`);
+      showToast(`El PDF té ${pageTexts.length} pàgines — s'han omplert ${filled} de ${stagedWords.length}, revisa la resta.`);
     }
   } catch(err){
     console.error('PDF read failed', err);
