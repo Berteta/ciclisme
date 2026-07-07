@@ -539,6 +539,7 @@ function renderPractice(){
       </div>
       <div class="console-actions">
         <button class="btn btn-brass" id="shuffleBtn">🔀 Una altra carpeta a l'atzar</button>
+        <button class="btn btn-ghost" id="addFolderQuickBtn">+ Nova carpeta</button>
         <button class="btn btn-ghost" id="manageBtn">Gestiona carpetes</button>
       </div>
     </div>
@@ -559,6 +560,7 @@ function renderPractice(){
   `;
 
   document.getElementById('shuffleBtn').onclick = onShuffle;
+  document.getElementById('addFolderQuickBtn').onclick = () => { stagedWords=[]; stagedName=''; stagedPdfFile=null; view='newFolder'; render(); };
   document.getElementById('manageBtn').onclick = () => { view='manage'; render(); };
   appEl.querySelectorAll('[data-play]').forEach(btn=>{
     btn.onclick = () => {
