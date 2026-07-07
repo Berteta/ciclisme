@@ -440,51 +440,67 @@ function leadingNumber(filename){
   return m ? parseInt(m[1], 10) : null;
 }
 
-function wordCore(tok){ return tok.replace(/^[^a-zA-Z]+|[^a-zA-Z]+$/g, ''); }
+function wordCore(tok){
+  const stripped = tok.replace(/^[^a-zA-Z]+|[^a-zA-Z]+$/g, '');
+  return stripped.replace(/[‘’]/g, "'");
+}
+
+const COMMON_CONTRACTIONS = new Set([
+  "it's","isn't","doesn't","don't","didn't","wasn't","weren't","aren't","wouldn't","couldn't",
+  "shouldn't","hasn't","haven't","hadn't","won't","can't","i'm","i'll","i'd","i've","you're",
+  "you'll","you'd","you've","we're","we'll","we'd","we've","they're","they'll","they'd","they've",
+  "he's","she's","that's","there's","here's","what's","who's","let's","how's","where's","when's"
+]);
+
+const EXTRA_PROPER_NOUNS = new Set([
+  "monday","tuesday","wednesday","thursday","friday","saturday","sunday",
+  "january","february","march","april","june","july","august","september","october","november","december"
+]);
 
 function isKnownWord(core){
   if (!core) return false;
   if (core.length === 1) return core === 'I' || core.toLowerCase() === 'a';
+  const lower = core.toLowerCase();
+  if (COMMON_CONTRACTIONS.has(lower) || EXTRA_PROPER_NOUNS.has(lower)) return true;
   const dict = window.EN_DICTIONARY;
-  return !!dict && dict.has(core.toLowerCase());
+  return !!dict && dict.has(lower);
 }
 
 function rejoinLetters(text){
   const tokens = text.split(/\s+/).filter(Boolean);
-  const words = [];
-  let i = 0;
-  while (i < tokens.length){
-    const core = wordCore(tokens[i]);
-    if (!core || isKnownWord(core)){
-      words.push(tokens[i]);
-      i++;
-      continue;
-    }
-    // Suspected spurious split: try extending forward, one token at a time,
-    // until the combined text forms a real word.
-    let merged = tokens[i];
-    let matchedAt = -1;
-    for (let j = i + 1; j < tokens.length && j < i + 8; j++){
-      merged += tokens[j];
-      if (isKnownWord(wordCore(merged))){ matchedAt = j; break; }
-    }
-    if (matchedAt !== -1){
-      words.push(merged);
-      i = matchedAt + 1;
-      continue;
-    }
-    // Forward extension failed: try attaching to the previously pushed word instead.
-    if (words.length > 0){
-      const candidate = words[words.length - 1] + tokens[i];
-      if (isKnownWord(wordCore(candidate))){
-        words[words.length - 1] = candidate;
-        i++;
-        continue;
+  const n = tokens.length;
+  if (n === 0) return '';
+  const MAX_GROUP = 12;
+  const UNKNOWN_PENALTY = 50;
+  const cost = new Array(n + 1).fill(Infinity);
+  const from = new Array(n + 1).fill(-1);
+  cost[0] = 0;
+  for (let i = 1; i <= n; i++){
+    for (let j = Math.max(0, i - MAX_GROUP); j < i; j++){
+      if (cost[j] === Infinity) continue;
+      const size = i - j;
+      const joined = tokens.slice(j, i).join('');
+      const core = wordCore(joined);
+      let groupCost;
+      if (!core){
+        groupCost = (size === 1) ? 0 : Infinity;
+      } else if (isKnownWord(core)){
+        groupCost = 1;
+      } else {
+        groupCost = UNKNOWN_PENALTY * size;
+      }
+      if (cost[j] + groupCost < cost[i]){
+        cost[i] = cost[j] + groupCost;
+        from[i] = j;
       }
     }
-    // Nothing validated: keep the fragment as-is rather than guessing wrong.
-    words.push(tokens[i]);
-    i++;
+  }
+  const words = [];
+  let i = n;
+  while (i > 0){
+    const j = from[i];
+    words.unshift(tokens.slice(j, i).join(''));
+    i = j;
   }
   return words.join(' ');
 }
@@ -763,7 +779,12 @@ function renderManage(){
     <h1 class="title display">Les teves carpetes</h1>
     <p class="subtitle">${foldersIndex.length} carpet${foldersIndex.length!==1?'es':'a'} desad${foldersIndex.length!==1?'es':'a'}</p>
     <div id="folderList"></div>
-    <button class="btn btn-brass" id="addFolderBtn" style="margin-top:6px;">+ Nova carpeta</button>
+    <div style="display:flex; gap:8px; margin-top:6px; flex-wrap:wrap;">
+      <button class="btn btn-brass" id="addFolderBtn">+ Nova carpeta</button>
+      <button class="btn btn-outline" id="importDirBtn">📂 Importa una carpeta sencera</button>
+      <input type="file" id="importDirInput" webkitdirectory multiple style="display:none;">
+    </div>
+    <div id="importPreview"></div>
   `;
   const list = document.getElementById('folderList');
   if (foldersIndex.length === 0){
@@ -815,6 +836,89 @@ function renderManage(){
     else { await onShuffle(); }
   };
   document.getElementById('addFolderBtn').onclick = () => { stagedWords=[]; stagedName=''; stagedPdfFile=null; view='newFolder'; render(); };
+  document.getElementById('importDirBtn').onclick = () => document.getElementById('importDirInput').click();
+  document.getElementById('importDirInput').onchange = onDirectorySelected;
+}
+
+function groupFilesByFolder(fileList){
+  const groups = new Map();
+  for (const file of fileList){
+    const rel = file.webkitRelativePath || file.name;
+    const parts = rel.split('/');
+    if (parts.length < 2) continue;
+    const groupKey = parts.slice(0, -1).join('/');
+    if (!groups.has(groupKey)) groups.set(groupKey, { name: parts[parts.length - 2], files: [] });
+    groups.get(groupKey).files.push(file);
+  }
+  const candidates = [];
+  for (const [key, group] of groups.entries()){
+    const media = group.files.filter(f => f.type.startsWith('audio/') || f.type.startsWith('video/'));
+    if (media.length === 0) continue;
+    const pdfs = group.files.filter(f => f.type === 'application/pdf' || /\.pdf$/i.test(f.name));
+    const pdf = pdfs.find(f => /practice/i.test(f.name)) || pdfs[0] || null;
+    candidates.push({ key, name: group.name, media, pdf });
+  }
+  candidates.sort((a, b) => naturalCompare(a.name, b.name));
+  return candidates;
+}
+
+let pendingImportGroups = [];
+
+function onDirectorySelected(e){
+  const groups = groupFilesByFolder(Array.from(e.target.files));
+  pendingImportGroups = groups;
+  const el = document.getElementById('importPreview');
+  if (groups.length === 0){
+    el.innerHTML = '<p class="subtitle">No s\'ha trobat cap subcarpeta amb àudio o vídeo dins la carpeta triada.</p>';
+    return;
+  }
+  el.innerHTML = `
+    <p class="subtitle" style="margin-top:14px;">Es crearan ${groups.length} carpetes noves:</p>
+    <ul style="margin:0 0 14px; padding-left:20px; font-size:14px; color:#6b6559;">
+      ${groups.map(g => `<li>${escapeHtml(g.name)} — ${g.media.length} arxius${g.pdf ? ', amb PDF' : ' (sense PDF)'}</li>`).join('')}
+    </ul>
+    <button class="btn btn-brass" id="confirmImportBtn">Importa aquestes ${groups.length} carpetes</button>
+  `;
+  document.getElementById('confirmImportBtn').onclick = onConfirmImport;
+}
+
+async function onConfirmImport(){
+  const groups = pendingImportGroups;
+  const el = document.getElementById('importPreview');
+  for (let i = 0; i < groups.length; i++){
+    const g = groups[i];
+    el.innerHTML = `<p class="subtitle">Important ${i + 1} de ${groups.length}: ${escapeHtml(g.name)}...</p>`;
+    const words = g.media.map(file => ({
+      id: uid(),
+      filename: file.name,
+      label: labelFromFilename(file.name),
+      blob: file,
+      mediaType: file.type.startsWith('video/') ? 'video' : 'audio',
+      mastered: false
+    }));
+    if (g.pdf){
+      try{
+        const pageTexts = await extractPdfPageTexts(g.pdf);
+        for (const w of words){
+          const pageNum = leadingNumber(w.filename);
+          if (pageNum !== null && pageNum >= 1 && pageNum <= pageTexts.length && pageTexts[pageNum - 1]){
+            w.label = pageTexts[pageNum - 1];
+          }
+        }
+      }catch(err){ console.error('PDF read failed for ' + g.name, err); }
+    }
+    const orderedWords = words.sort((a, b) => naturalCompare(a.filename, b.filename));
+    const id = uid();
+    const ok = await saveNewFolderWithMedia(id, g.name, orderedWords);
+    if (ok){
+      foldersIndex.push({ id, name: g.name, wordCount: orderedWords.length, masteredCount: 0 });
+      await saveIndex();
+    }
+  }
+  pendingImportGroups = [];
+  el.innerHTML = '';
+  showToast('Importació acabada.');
+  renderManage();
 }
 
 function renderNewFolder(){
@@ -883,20 +987,25 @@ function renderPdfZone(){
   if (fillBtn) fillBtn.onclick = onFillFromPdf;
 }
 
+async function extractPdfPageTexts(pdfFile){
+  const buf = await pdfFile.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+  const pageTexts = [];
+  for (let i = 1; i <= pdf.numPages; i++){
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    const raw = content.items.map(it => it.str).join(' ').replace(/\s+/g, ' ').trim();
+    pageTexts.push(rejoinLetters(raw));
+  }
+  return pageTexts;
+}
+
 async function onFillFromPdf(){
   if (!stagedPdfFile) return;
   if (!window.pdfjsLib){ showToast('No s\'ha pogut carregar el lector de PDF.'); return; }
   showToast('Llegint el PDF...');
   try{
-    const buf = await stagedPdfFile.arrayBuffer();
-    const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
-    const pageTexts = [];
-    for (let i = 1; i <= pdf.numPages; i++){
-      const page = await pdf.getPage(i);
-      const content = await page.getTextContent();
-      const raw = content.items.map(it => it.str).join(' ').replace(/\s+/g, ' ').trim();
-      pageTexts.push(rejoinLetters(raw));
-    }
+    const pageTexts = await extractPdfPageTexts(stagedPdfFile);
     let filled = 0;
     let missingNumber = 0;
     for (const w of stagedWords){
