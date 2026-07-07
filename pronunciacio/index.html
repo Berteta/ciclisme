@@ -7,6 +7,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+  if (window.pdfjsLib){
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  }
+</script>
 <style>
   :root{
     --bg: #EDE7DA;
@@ -369,7 +375,7 @@ async function storeSet(key, valueObj){
       tx.onerror = () => reject(tx.error);
     });
     return true;
-  }catch(e){ console.error('storage set failed', e); return false; }
+  }catch(e){ console.error('storage set failed', e); lastStorageError = e; return false; }
 }
 async function storeDelete(key){
   try{
@@ -388,10 +394,13 @@ let foldersIndex = [];      // [{id, name, wordCount, masteredCount}]
 let sessionState = { lastFolderId: null };
 let currentFolder = null;   // full folder object currently shown in practice view
 let view = 'loading';       // loading | practice | manage | newFolder | empty
-let stagedWords = [];       // for new-folder form: [{id, label, audio}]
+let stagedWords = [];       // for new-folder form: [{id, filename, label, audio}]
 let stagedName = '';
+let stagedPdfFile = null;   // raw File for the transcriptions PDF, if chosen
 
+let lastStorageError = null;
 function uid(){ return Math.random().toString(36).slice(2,10) + Date.now().toString(36); }
+function naturalCompare(a, b){ return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }); }
 
 function showToast(msg){
   const t = document.getElementById('toast');
@@ -427,7 +436,24 @@ async function saveFolder(folder){
   }
   const ok = await storeSet('folder:' + folder.id, str);
   if (!ok){
-    showToast('No s\'ha pogut desar — potser el navegador s\'ha quedat sense espai.');
+    let lines = ['No s\'ha pogut desar la carpeta.', ''];
+    lines.push('Mida d\'aquesta carpeta: ' + sizeMB.toFixed(1) + ' MB');
+    if (lastStorageError){
+      lines.push('Error tècnic: ' + (lastStorageError.name || '') + ' — ' + (lastStorageError.message || lastStorageError));
+    }
+    try{
+      if (navigator.storage && navigator.storage.estimate){
+        const est = await navigator.storage.estimate();
+        lines.push('Espai fet servir pel navegador: ' + ((est.usage||0)/1024/1024).toFixed(1) + ' MB');
+        lines.push('Espai total disponible: ' + ((est.quota||0)/1024/1024).toFixed(1) + ' MB');
+      } else {
+        lines.push('(Aquest navegador no permet consultar l\'espai disponible.)');
+      }
+    }catch(e){ lines.push('(No s\'ha pogut consultar l\'espai disponible: ' + e.message + ')'); }
+    lines.push('');
+    lines.push('Origen de la pàgina: ' + location.href);
+    alert(lines.join('\n'));
+    showToast('No s\'ha pogut desar — mira la finestra emergent per als detalls.');
   }
   return ok;
 }
@@ -476,7 +502,7 @@ function renderEmpty(){
       <button class="btn btn-brass" id="goNewFolder" style="margin-top:14px;">+ Crea la primera carpeta</button>
     </div>
   `;
-  document.getElementById('goNewFolder').onclick = () => { stagedWords = []; stagedName=''; view='newFolder'; render(); };
+  document.getElementById('goNewFolder').onclick = () => { stagedWords = []; stagedName=''; stagedPdfFile=null; view='newFolder'; render(); };
 }
 
 function renderPractice(){
@@ -490,7 +516,7 @@ function renderPractice(){
   appEl.innerHTML = `
     <div class="eyebrow">Pronunciació — sessió d'avui</div>
     <h1 class="title display">A practicar</h1>
-    <p class="subtitle">${foldersIndex.length} carpeta${foldersIndex.length!==1?'s':''} en total</p>
+    <p class="subtitle">${foldersIndex.length} carpet${foldersIndex.length!==1?'es':'a'} en total</p>
 
     <div class="console">
       <div class="console-top">
@@ -573,7 +599,7 @@ function renderManage(){
       <div class="eyebrow" style="margin:0;">Gestiona</div>
     </div>
     <h1 class="title display">Les teves carpetes</h1>
-    <p class="subtitle">${foldersIndex.length} carpeta${foldersIndex.length!==1?'s':''} desada${foldersIndex.length!==1?'es':''}</p>
+    <p class="subtitle">${foldersIndex.length} carpet${foldersIndex.length!==1?'es':'a'} desad${foldersIndex.length!==1?'es':'a'}</p>
     <div id="folderList"></div>
     <button class="btn btn-brass" id="addFolderBtn" style="margin-top:6px;">+ Nova carpeta</button>
   `;
@@ -619,7 +645,7 @@ function renderManage(){
     if (currentFolder){ view='practice'; render(); }
     else { await onShuffle(); }
   };
-  document.getElementById('addFolderBtn').onclick = () => { stagedWords=[]; stagedName=''; view='newFolder'; render(); };
+  document.getElementById('addFolderBtn').onclick = () => { stagedWords=[]; stagedName=''; stagedPdfFile=null; view='newFolder'; render(); };
 }
 
 function renderNewFolder(){
@@ -647,6 +673,11 @@ function renderNewFolder(){
     <div id="stagedList"></div>
     <div id="sizeWarn"></div>
 
+    <div class="field">
+      <label>Transcripcions (PDF, opcional)</label>
+      <div id="pdfZone"></div>
+    </div>
+
     <div class="footer-actions">
       <button class="btn btn-outline" id="cancelBtn">Cancel·la</button>
       <button class="btn btn-brass" id="saveFolderBtn">Desa carpeta</button>
@@ -661,6 +692,57 @@ function renderNewFolder(){
   document.getElementById('saveFolderBtn').onclick = onSaveNewFolder;
 
   renderStagedList();
+  renderPdfZone();
+}
+
+function renderPdfZone(){
+  const el = document.getElementById('pdfZone');
+  if (!el) return;
+  el.innerHTML = `
+    <div class="upload-zone" id="pdfUploadZone">
+      <input type="file" id="pdfInput" accept="application/pdf">
+      ${stagedPdfFile ? '📄 ' + escapeHtml(stagedPdfFile.name) + ' — toca per canviar-lo' : '📄 Toca per triar el PDF amb totes les transcripcions'}
+    </div>
+    ${stagedWords.length && stagedPdfFile ? '<button class="btn btn-dark" id="fillFromPdfBtn" style="margin-top:10px;">Omple les transcripcions des del PDF</button>' : ''}
+  `;
+  document.getElementById('pdfUploadZone').onclick = () => document.getElementById('pdfInput').click();
+  document.getElementById('pdfInput').onchange = (e) => {
+    stagedPdfFile = e.target.files[0] || null;
+    renderPdfZone();
+  };
+  const fillBtn = document.getElementById('fillFromPdfBtn');
+  if (fillBtn) fillBtn.onclick = onFillFromPdf;
+}
+
+async function onFillFromPdf(){
+  if (!stagedPdfFile) return;
+  if (!window.pdfjsLib){ showToast('No s\'ha pogut carregar el lector de PDF.'); return; }
+  showToast('Llegint el PDF...');
+  try{
+    const buf = await stagedPdfFile.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+    const pageTexts = [];
+    for (let i = 1; i <= pdf.numPages; i++){
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      const text = content.items.map(it => it.str).join(' ').replace(/\s+/g, ' ').trim();
+      pageTexts.push(text);
+    }
+    const ordered = [...stagedWords].sort((a, b) => naturalCompare(a.filename, b.filename));
+    const n = Math.min(ordered.length, pageTexts.length);
+    for (let i = 0; i < n; i++){
+      if (pageTexts[i]) ordered[i].label = pageTexts[i];
+    }
+    renderStagedList();
+    if (pageTexts.length === ordered.length){
+      showToast(`Transcripcions omplertes (${n} de ${n}).`);
+    } else {
+      showToast(`El PDF té ${pageTexts.length} pàgines i hi ha ${ordered.length} àudios — s'han omplert ${n}, revisa la resta.`);
+    }
+  } catch(err){
+    console.error('PDF read failed', err);
+    showToast('No s\'ha pogut llegir el PDF.');
+  }
 }
 
 function labelFromFilename(name){
@@ -677,9 +759,10 @@ async function handleFilesStaged(e){
       r.onerror = rej;
       r.readAsDataURL(file);
     });
-    stagedWords.push({ id: uid(), label: labelFromFilename(file.name), audio: dataUrl, mastered: false });
+    stagedWords.push({ id: uid(), filename: file.name, label: labelFromFilename(file.name), audio: dataUrl, mastered: false });
   }
   renderStagedList();
+  renderPdfZone();
 }
 
 function renderStagedList(){
@@ -720,13 +803,14 @@ async function onSaveNewFolder(){
   if (!name){ showToast('Posa un nom a la carpeta.'); return; }
   if (stagedWords.length === 0){ showToast('Puja almenys un arxiu d\'àudio.'); return; }
   const id = uid();
-  const folder = { id, name, words: stagedWords };
+  const orderedWords = [...stagedWords].sort((a, b) => naturalCompare(a.filename, b.filename));
+  const folder = { id, name, words: orderedWords };
   const ok = await saveFolder(folder);
   if (!ok) return;
   foldersIndex.push({ id, name, wordCount: folder.words.length, masteredCount: 0 });
   await saveIndex();
   showToast('Carpeta desada.');
-  stagedWords = []; stagedName = '';
+  stagedWords = []; stagedName = ''; stagedPdfFile = null;
   currentFolder = folder;
   sessionState.lastFolderId = id;
   await storeSet('session-state', sessionState);
