@@ -393,6 +393,14 @@ async function storeDelete(key){
 /* ---------------- state ---------------- */
 let foldersIndex = [];      // [{id, name, wordCount, masteredCount}]
 let sessionState = { lastFolderId: null };
+let currentAudio = null;
+let currentAudioWordId = null;
+
+function stopAudio(){
+  if (currentAudio){ currentAudio.pause(); currentAudio.currentTime = 0; }
+  currentAudio = null;
+  currentAudioWordId = null;
+}
 let currentFolder = null;   // full folder object currently shown in practice view
 let view = 'loading';       // loading | practice | manage | newFolder | empty
 let stagedWords = [];       // for new-folder form: [{id, filename, label, audio}]
@@ -601,8 +609,10 @@ function renderPractice(){
     <div class="word-panel">
       ${f.words.map(w => `
         <div class="word-row" data-id="${w.id}">
-          <button class="play-btn" data-play="${w.id}" title="Reprodueix">
-            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+          <button class="play-btn" data-play="${w.id}" title="${w.id === currentAudioWordId ? 'Atura' : 'Reprodueix'}">
+            ${w.id === currentAudioWordId
+              ? '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12"/></svg>'
+              : '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>'}
           </button>
           <div class="word-label ${w.mastered?'mastered':''}">${escapeHtml(w.label)}</div>
           <button class="master-toggle ${w.mastered?'on':''}" data-toggle="${w.id}">
@@ -614,15 +624,24 @@ function renderPractice(){
   `;
 
   document.getElementById('shuffleBtn').onclick = onShuffle;
-  document.getElementById('addFolderQuickBtn').onclick = () => { stagedWords=[]; stagedName=''; stagedPdfFile=null; view='newFolder'; render(); };
-  document.getElementById('manageBtn').onclick = () => { view='manage'; render(); };
+  document.getElementById('addFolderQuickBtn').onclick = () => { stopAudio(); stagedWords=[]; stagedName=''; stagedPdfFile=null; view='newFolder'; render(); };
+  document.getElementById('manageBtn').onclick = () => { stopAudio(); view='manage'; render(); };
   appEl.querySelectorAll('[data-play]').forEach(btn=>{
     btn.onclick = () => {
-      const w = f.words.find(x => x.id === btn.dataset.play);
-      if (w && w.audio){
-        const audio = new Audio(w.audio);
-        audio.play().catch(()=> showToast('No s\'ha pogut reproduir l\'àudio.'));
-      }
+      const wordId = btn.dataset.play;
+      const w = f.words.find(x => x.id === wordId);
+      if (!w || !w.audio) return;
+      const wasPlayingThis = currentAudioWordId === wordId;
+      stopAudio();
+      if (wasPlayingThis){ renderPractice(); return; }
+      const audio = new Audio(w.audio);
+      audio.onended = () => {
+        if (currentAudioWordId === wordId){ stopAudio(); renderPractice(); }
+      };
+      audio.play().catch(()=> showToast('No s\'ha pogut reproduir l\'àudio.'));
+      currentAudio = audio;
+      currentAudioWordId = wordId;
+      renderPractice();
     };
   });
   appEl.querySelectorAll('[data-toggle]').forEach(btn=>{
@@ -638,6 +657,7 @@ function renderPractice(){
 }
 
 async function onShuffle(){
+  stopAudio();
   const next = pickRandomFolder(currentFolder ? currentFolder.id : sessionState.lastFolderId);
   if (!next){ view='empty'; render(); return; }
   view='loading'; render();
