@@ -406,13 +406,28 @@ function leadingNumber(filename){
   return m ? parseInt(m[1], 10) : null;
 }
 
+const SHORT_ENGLISH_WORDS = new Set([
+  'am','an','as','at','be','by','do','go','he','if','in','is','it','me','my','no','of','on','or','ok','so','to','up','us','we',
+  'ah','eh','hi','ha','ma','pa','ox'
+]);
+
+function isRealShortWord(core){
+  if (core.length === 1) return core === 'I' || core === 'a' || core === 'A';
+  return SHORT_ENGLISH_WORDS.has(core.toLowerCase());
+}
+
 function rejoinLetters(text){
   const tokens = text.split(/\s+/).filter(Boolean);
   const words = [];
   let buffer = '';
   for (const tok of tokens){
-    if (tok.length === 1){
+    const core = tok.replace(/^[^a-zA-Z]+|[^a-zA-Z]+$/g, '');
+    const isFragment = core.length > 0 && core.length <= 2 && !isRealShortWord(core);
+    if (isFragment){
       buffer += tok;
+    } else if (buffer.length > 0 && buffer.length < 4){
+      words.push(buffer + tok);
+      buffer = '';
     } else {
       if (buffer){ words.push(buffer); buffer = ''; }
       words.push(tok);
