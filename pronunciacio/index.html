@@ -176,6 +176,7 @@
   }
   .word-row{
     display:flex;
+    flex-wrap: wrap;
     align-items:center;
     gap: 12px;
     padding: 13px 16px;
@@ -222,6 +223,38 @@
   .master-toggle.on{
     background: var(--teal);
     color: #fff;
+  }
+  .swap-selected{
+    background: rgba(184,134,59,0.12);
+    border-radius: 10px;
+    box-shadow: inset 0 0 0 1px var(--brass);
+  }
+  .correction-bar{
+    display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between;
+    gap: 10px;
+    margin-top: 14px;
+    padding: 12px 14px;
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 1px 0 var(--line-light);
+  }
+  .correction-hint{ font-size: 12.5px; color: #6b6559; }
+  .correction-shift{ display:flex; gap: 8px; }
+  .correction-controls{
+    flex-basis: 100%;
+    display:flex;
+    align-items:center;
+    gap: 8px;
+    margin-top: 8px;
+  }
+  .move-select{
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 12px;
+    padding: 6px 8px;
+    border-radius: 8px;
+    border: 1px solid var(--line-light);
+    background: #fff;
+    color: var(--ink);
   }
 
   .footer-actions{
@@ -431,6 +464,9 @@ let view = 'loading';       // loading | practice | manage | newFolder | empty
 let stagedWords = [];       // for new-folder form: [{id, filename, label, audio}]
 let stagedName = '';
 let stagedPdfFile = null;   // raw File for the transcriptions PDF, if chosen
+
+let correctionMode = false;   // manual audio<->text re-pairing mode, for fixing mismatched imports
+let swapSelection = null;     // wordId chosen as the first item of a label swap, while in correctionMode
 
 let lastStorageError = null;
 function uid(){ return Math.random().toString(36).slice(2,10) + Date.now().toString(36); }
@@ -687,12 +723,23 @@ function renderPractice(){
         <button class="btn btn-brass" id="shuffleBtn">🔀 Una altra carpeta a l'atzar</button>
         <button class="btn btn-ghost" id="addFolderQuickBtn">+ Nova carpeta</button>
         <button class="btn btn-ghost" id="manageBtn">Gestiona carpetes</button>
+        <button class="btn btn-ghost" id="correctionModeBtn">${correctionMode ? '✕ Surt de corregir' : '✏️ Corregeix aparellaments'}</button>
       </div>
     </div>
 
+    ${correctionMode ? `
+      <div class="correction-bar">
+        <span class="correction-hint">Toca 🔀 a dues paraules per intercanviar els seus textos.</span>
+        <div class="correction-shift">
+          <button class="btn btn-outline" id="shiftUpBtn">▲ Desplaça etiquetes</button>
+          <button class="btn btn-outline" id="shiftDownBtn">▼ Desplaça etiquetes</button>
+        </div>
+      </div>
+    ` : ''}
+
     <div class="word-panel">
       ${f.words.map(w => w.mediaType === 'video' ? `
-        <div class="word-row video-row" data-id="${w.id}">
+        <div class="word-row video-row ${w.id===swapSelection?'swap-selected':''}" data-id="${w.id}">
           <div class="video-row-top">
             <div class="word-label ${w.mastered?'mastered':''}">${escapeHtml(w.label)}</div>
             <button class="master-toggle ${w.mastered?'on':''}" data-toggle="${w.id}">
@@ -700,9 +747,10 @@ function renderPractice(){
             </button>
           </div>
           <video class="word-video" controls preload="metadata" src="${w.audio}"></video>
+          ${correctionControlsHtml(w, f)}
         </div>
       ` : `
-        <div class="word-row" data-id="${w.id}">
+        <div class="word-row ${w.id===swapSelection?'swap-selected':''}" data-id="${w.id}">
           <button class="play-btn" data-play="${w.id}" title="${w.id === currentAudioWordId ? 'Atura' : 'Reprodueix'}">
             ${w.id === currentAudioWordId
               ? '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12"/></svg>'
@@ -712,6 +760,7 @@ function renderPractice(){
           <button class="master-toggle ${w.mastered?'on':''}" data-toggle="${w.id}">
             ${w.mastered ? '✓ DOMINADA' : 'PER REPASSAR'}
           </button>
+          ${correctionControlsHtml(w, f)}
         </div>
       `).join('')}
     </div>
@@ -720,6 +769,17 @@ function renderPractice(){
   document.getElementById('shuffleBtn').onclick = onShuffle;
   document.getElementById('addFolderQuickBtn').onclick = () => { stopAudio(); stagedWords=[]; stagedName=''; stagedPdfFile=null; view='newFolder'; render(); };
   document.getElementById('manageBtn').onclick = () => { stopAudio(); view='manage'; render(); };
+  document.getElementById('correctionModeBtn').onclick = () => { correctionMode = !correctionMode; swapSelection = null; renderPractice(); };
+  if (correctionMode){
+    document.getElementById('shiftUpBtn').onclick = () => shiftLabels(1);
+    document.getElementById('shiftDownBtn').onclick = () => shiftLabels(-1);
+    appEl.querySelectorAll('[data-swap]').forEach(btn=>{
+      btn.onclick = () => onSwapClick(btn.dataset.swap);
+    });
+    appEl.querySelectorAll('[data-move]').forEach(sel=>{
+      sel.onchange = () => onMoveWord(sel.dataset.move, sel.value);
+    });
+  }
   appEl.querySelectorAll('[data-play]').forEach(btn=>{
     btn.onclick = () => {
       const wordId = btn.dataset.play;
@@ -768,6 +828,80 @@ async function onShuffle(){
   sessionState.lastFolderId = folder.id;
   await storeSet('session-state', sessionState);
   view='practice'; render();
+}
+
+function correctionControlsHtml(w, f){
+  if (!correctionMode) return '';
+  const options = foldersIndex.filter(fi => fi.id !== f.id)
+    .map(fi => `<option value="${fi.id}">${escapeHtml(fi.name)}</option>`).join('');
+  return `
+    <div class="correction-controls">
+      <button class="icon-btn swap-btn" data-swap="${w.id}" title="Selecciona per intercanviar text">🔀</button>
+      <select class="move-select" data-move="${w.id}">
+        <option value="">Mou a...</option>
+        ${options}
+      </select>
+    </div>
+  `;
+}
+
+function onSwapClick(wordId){
+  if (!swapSelection){
+    swapSelection = wordId;
+    renderPractice();
+    return;
+  }
+  if (swapSelection === wordId){
+    swapSelection = null;
+    renderPractice();
+    return;
+  }
+  const f = currentFolder;
+  const a = f.words.find(w => w.id === swapSelection);
+  const b = f.words.find(w => w.id === wordId);
+  const tmp = a.label;
+  a.label = b.label;
+  b.label = tmp;
+  swapSelection = null;
+  renderPractice();
+  saveFolderMeta(f);
+}
+
+async function shiftLabels(direction){
+  const f = currentFolder;
+  const n = f.words.length;
+  if (n < 2) return;
+  const labels = f.words.map(w => w.label);
+  const shifted = direction > 0
+    ? [labels[n - 1], ...labels.slice(0, n - 1)]
+    : [...labels.slice(1), labels[0]];
+  f.words.forEach((w, i) => { w.label = shifted[i]; });
+  renderPractice();
+  await saveFolderMeta(f);
+}
+
+async function onMoveWord(wordId, targetFolderId){
+  if (!targetFolderId) return;
+  const f = currentFolder;
+  const idx = f.words.findIndex(w => w.id === wordId);
+  if (idx === -1) return;
+  const [w] = f.words.splice(idx, 1);
+  if (w.audio && w.audio.startsWith('blob:')) URL.revokeObjectURL(w.audio);
+  recomputeIndexEntry(f);
+  await saveFolderMeta(f);
+
+  const raw = await storeGet('folder:' + targetFolderId);
+  const targetMeta = JSON.parse(raw);
+  targetMeta.words.push({ id: w.id, filename: w.filename, label: w.label, mediaType: w.mediaType, mastered: !!w.mastered });
+  await storeSet('folder:' + targetFolderId, targetMeta);
+  const targetIdx = foldersIndex.find(fi => fi.id === targetFolderId);
+  targetIdx.wordCount = targetMeta.words.length;
+  targetIdx.masteredCount = targetMeta.words.filter(x => x.mastered).length;
+  await saveIndex();
+
+  swapSelection = null;
+  showToast('Paraula moguda a una altra carpeta.');
+  renderPractice();
 }
 
 function renderManage(){
