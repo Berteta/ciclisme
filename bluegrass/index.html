@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bluegrass & co — tauler de cançons</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #EDE7DA;
+    --panel: #211F1A;
+    --brass: #B8863B;
+    --brass-bright: #D6A85C;
+    --rust: #A6432F;
+    --ink: #2A2724;
+    --cream: #F3EEE2;
+    --line-light: rgba(42,39,36,0.14);
+  }
+  *{ box-sizing: border-box; }
+  body{
+    margin:0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'IBM Plex Sans', sans-serif;
+    min-height:100vh;
+  }
+  .display{ font-family:'Fraunces', serif; }
+
+  .app{
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 28px 18px 60px;
+  }
+
+  .eyebrow{
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--brass);
+    display:flex; align-items:center; gap:8px;
+    margin-bottom: 6px;
+  }
+  .eyebrow::before{
+    content:""; width:7px; height:7px; border-radius:50%;
+    background: var(--brass); display:inline-block;
+  }
+  h1.title{ font-size:28px; font-weight:600; margin:0 0 4px; }
+  .subtitle{ color:#6b6559; font-size:14px; margin:0 0 20px; }
+
+  .btn{
+    font-family:'IBM Plex Sans', sans-serif;
+    font-size: 13.5px; font-weight:500;
+    border:none; border-radius:10px; padding:10px 16px;
+    cursor:pointer; transition: transform 0.08s ease, filter 0.15s ease;
+  }
+  .btn:active{ transform: scale(0.97); }
+  .btn-brass{ background: var(--brass); color:#201a0e; }
+  .btn-brass:hover{ filter: brightness(1.08); }
+  .btn-outline{
+    background: transparent; color: var(--ink);
+    box-shadow: inset 0 0 0 1px var(--line-light);
+  }
+  .btn-outline:hover{ background: rgba(42,39,36,0.05); }
+  .btn-danger{
+    background: transparent; color: var(--rust);
+    box-shadow: inset 0 0 0 1px rgba(166,67,47,0.4);
+  }
+
+  .top-actions{ display:flex; gap:10px; flex-wrap:wrap; margin-bottom:8px; }
+
+  .board{ display:flex; gap:16px; margin-top:18px; align-items:flex-start; }
+  .board-col{
+    flex:1; min-width:0;
+    background:#fff; border-radius:16px; padding:14px;
+    box-shadow: 0 1px 0 var(--line-light);
+  }
+  @media (max-width: 820px){
+    .board{ flex-direction:column; }
+    .board-col{ width:100%; }
+  }
+  .col-header{
+    display:flex; justify-content:space-between; align-items:baseline;
+    margin-bottom:10px; padding:0 4px;
+  }
+  .col-title{ font-family:'Fraunces', serif; font-size:16px; font-weight:600; }
+  .col-count{ font-family:'IBM Plex Mono', monospace; font-size:11px; color:#948e80; }
+  .col-empty{ font-size:12.5px; color:#948e80; padding:8px 4px; }
+
+  .song-card{
+    background: var(--bg);
+    border-radius: 12px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+  }
+  .song-card.expanded{ box-shadow: inset 0 0 0 1px var(--brass); }
+  .song-card-head{ display:flex; align-items:center; gap:8px; cursor:pointer; }
+  .song-title-block{ flex:1; min-width:0; }
+  .song-title{ font-size:14px; font-weight:500; overflow-wrap:anywhere; }
+  .song-meta{ font-family:'IBM Plex Mono', monospace; font-size:10.5px; color:#948e80; margin-top:2px; }
+  .song-card-arrows{ display:flex; flex-direction:column; gap:2px; }
+  .song-card-arrows button{
+    width:22px; height:18px; font-size:10px; line-height:1;
+    border:none; border-radius:4px; background:#fff; color:var(--ink); cursor:pointer;
+  }
+  .song-card-arrows button:hover{ background:#e2dccb; }
+
+  .song-card-body{ margin-top:10px; display:flex; flex-direction:column; gap:8px; }
+  .song-video{ width:100%; display:block; border-radius:8px; background:#000; max-height:220px; }
+  .song-edit-row{ display:flex; flex-direction:column; gap:6px; }
+  .song-edit-row input{
+    padding:7px 9px; border-radius:8px; border:1px solid var(--line-light);
+    font-size:13px; font-family:'IBM Plex Sans', sans-serif; background:#fff;
+  }
+  .song-actions-row{ display:flex; justify-content:space-between; align-items:center; gap:8px; }
+  .song-actions-row select{
+    font-family:'IBM Plex Mono', monospace; font-size:12px; padding:6px 8px;
+    border-radius:8px; border:1px solid var(--line-light); background:#fff; color:var(--ink);
+  }
+
+  .empty-state{ text-align:center; padding:50px 20px; color:#8f8a7d; }
+  .empty-state .display{ font-size:20px; color:var(--ink); margin-bottom:6px; }
+
+  .upload-zone{
+    border: 1.5px dashed rgba(42,39,36,0.25);
+    border-radius: 12px; padding: 22px; text-align:center;
+    cursor:pointer; background:#fff; margin-bottom:16px;
+  }
+  .upload-zone:hover{ background: #faf8f2; }
+  .upload-zone input{ display:none; }
+
+  .bulk-apply-bar{
+    display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap; align-items:center;
+    background:#fff; padding:12px; border-radius:10px;
+  }
+  .bulk-apply-bar input{
+    flex:1; min-width:120px; padding:7px 9px; border-radius:8px;
+    border:1px solid var(--line-light); font-size:13px;
+  }
+
+  .staged-song{
+    background:#fff; border-radius:10px; padding:12px; margin-bottom:8px;
+    display:flex; flex-direction:column; gap:7px;
+  }
+  .staged-song-top{ display:flex; align-items:center; gap:8px; }
+  .staged-song-top .fname{ flex:1; font-size:11.5px; color:#948e80; overflow-wrap:anywhere; }
+  .staged-song input, .staged-song select{
+    padding:7px 9px; border-radius:8px; border:1px solid var(--line-light);
+    font-size:13px; font-family:'IBM Plex Sans', sans-serif; background:#fff;
+  }
+  .staged-song-fields{ display:flex; gap:6px; flex-wrap:wrap; }
+  .staged-song-fields input{ flex:1; min-width:100px; }
+  .rm{ background:none; border:none; color:#b6b0a0; cursor:pointer; font-size:16px; line-height:1; padding:2px 4px; }
+  .rm:hover{ color: var(--rust); }
+
+  .top-nav{ display:flex; align-items:center; gap:10px; margin-bottom:18px; }
+  .back-btn{ background:none; border:none; cursor:pointer; color:#6b6559; font-size:20px; padding:4px 6px; }
+  .back-btn:hover{ color:var(--ink); }
+
+  .footer-actions{ display:flex; justify-content:space-between; align-items:center; margin-top:18px; gap:10px; }
+
+  .toast{
+    position:fixed; bottom:22px; left:50%; transform:translateX(-50%);
+    background: var(--ink); color:var(--cream);
+    padding: 11px 18px; border-radius: 10px; font-size:13.5px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+    opacity:0; pointer-events:none;
+    transition: opacity 0.25s ease, transform 0.25s ease;
+    z-index: 50;
+  }
+  .toast.show{ opacity:1; transform:translateX(-50%) translateY(-4px); }
+  .loading{ text-align:center; padding:60px 20px; color:#8f8a7d; }
+</style>
+</head>
+<body>
+<div class="app" id="app"></div>
+<div class="toast" id="toast"></div>
+<datalist id="genreList">
+  <option value="Bluegrass"><option value="Dobro"><option value="Clawhammer">
+  <option value="Old-time"><option value="Irish"><option value="Country">
+</datalist>
+
+<script>
+/* ---------------- storage helpers (IndexedDB, local to this browser) ---------------- */
+const DB_NAME = 'bluegrass-db';
+const STORE_NAME = 'kv';
+let dbPromise = null;
+
+function openDB(){
+  if (dbPromise) return dbPromise;
+  dbPromise = new Promise((resolve, reject)=>{
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)){
+        db.createObjectStore(STORE_NAME);
+      }
+    };
+    req.onsuccess = (e) => resolve(e.target.result);
+    req.onerror = (e) => reject(e.target.error);
+  });
+  return dbPromise;
+}
+
+async function storeGet(key){
+  try{
+    const db = await openDB();
+    return await new Promise((resolve, reject)=>{
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const req = tx.objectStore(STORE_NAME).get(key);
+      req.onsuccess = () => resolve(req.result != null ? req.result : null);
+      req.onerror = () => reject(req.error);
+    });
+  }catch(e){ return null; }
+}
+async function storeSet(key, valueObj){
+  const str = typeof valueObj === 'string' ? valueObj : JSON.stringify(valueObj);
+  try{
+    const db = await openDB();
+    await new Promise((resolve, reject)=>{
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      tx.objectStore(STORE_NAME).put(str, key);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    return true;
+  }catch(e){ console.error('storage set failed', e); return false; }
+}
+async function storeSetBlob(key, blob){
+  try{
+    const db = await openDB();
+    await new Promise((resolve, reject)=>{
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      tx.objectStore(STORE_NAME).put(blob, key);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    return true;
+  }catch(e){ console.error('storage set blob failed', e); return false; }
+}
+async function storeDelete(key){
+  try{
+    const db = await openDB();
+    await new Promise((resolve, reject)=>{
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      tx.objectStore(STORE_NAME).delete(key);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  }catch(e){}
+}
+
+/* ---------------- state ---------------- */
+const STATUSES = [
+  { key: 'aprendre', label: 'Vull aprendre' },
+  { key: 'progres', label: 'En progrés' },
+  { key: 'domino', label: 'Domino' }
+];
+
+let songs = [];           // [{id, title, artist, genre, status, videos:[{id, filename, mediaType, url}]}]
+let view = 'loading';     // loading | board | addSongs
+let expandedId = null;    // song id currently expanded (showing its video)
+let stagedSongs = [];     // for add flow: [{id, filename, title, artist, genre, status, blob}]
+
+function uid(){ return Math.random().toString(36).slice(2,10) + Date.now().toString(36); }
+
+function labelFromFilename(name){
+  const base = name.replace(/\.[^/.]+$/, '');
+  return base.replace(/[_-]+/g, ' ').trim();
+}
+
+function escapeHtml(str){
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(()=> t.classList.remove('show'), 2200);
+}
+
+/* ---------------- data layer ---------------- */
+async function loadSongs(){
+  const raw = await storeGet('songs-meta');
+  songs = raw ? JSON.parse(raw) : [];
+}
+async function saveSongs(){
+  await storeSet('songs-meta', songs.map(s => ({
+    id: s.id, title: s.title, artist: s.artist, genre: s.genre, status: s.status,
+    videos: s.videos.map(v => ({ id: v.id, filename: v.filename, mediaType: v.mediaType }))
+  })));
+}
+
+async function loadVideoUrls(song){
+  for (const v of song.videos){
+    if (v.url) continue;
+    const blob = await storeGet('media:' + v.id);
+    v.url = blob ? URL.createObjectURL(blob) : null;
+  }
+}
+function revokeVideoUrls(song){
+  if (!song) return;
+  for (const v of song.videos){
+    if (v.url){ URL.revokeObjectURL(v.url); v.url = null; }
+  }
+}
+
+/* ---------------- rendering ---------------- */
+const appEl = document.getElementById('app');
+
+function render(){
+  if (view === 'loading') return renderLoading();
+  if (view === 'board') return renderBoard();
+  if (view === 'addSongs') return renderAddSongs();
+}
+
+function renderLoading(){
+  appEl.innerHTML = '<div class="loading">Carregant...</div>';
+}
+
+function renderBoard(){
+  appEl.innerHTML = `
+    <div class="eyebrow">Bluegrass, dobro, clawhammer & co</div>
+    <h1 class="title display">El meu tauler de cançons</h1>
+    <p class="subtitle">${songs.length} canç${songs.length!==1?'ons':'ó'} en total</p>
+    <div class="top-actions">
+      <button class="btn btn-brass" id="addSongsBtn">+ Afegeix cançons</button>
+    </div>
+    <div class="board">
+      ${STATUSES.map(st => {
+        const group = songs.filter(s => s.status === st.key);
+        return `
+          <div class="board-col" data-col="${st.key}">
+            <div class="col-header">
+              <div class="col-title">${st.label}</div>
+              <div class="col-count">${group.length}</div>
+            </div>
+            ${group.length === 0 ? '<div class="col-empty">Res per aquí encara.</div>' : group.map(s => cardHtml(s)).join('')}
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+
+  if (songs.length === 0){
+    appEl.innerHTML += `
+      <div class="empty-state">
+        <div class="display">Comencem</div>
+        <p>Afegeix els primers vídeos de cançons que vulguis seguir.</p>
+      </div>
+    `;
+  }
+
+  document.getElementById('addSongsBtn').onclick = () => {
+    stagedSongs = [];
+    view = 'addSongs';
+    render();
+  };
+
+  appEl.querySelectorAll('[data-toggle-card]').forEach(el => {
+    el.onclick = () => onToggleExpand(el.dataset.toggleCard);
+  });
+  appEl.querySelectorAll('[data-move-up]').forEach(btn => {
+    btn.onclick = (e) => { e.stopPropagation(); moveWithinStatus(btn.dataset.moveUp, -1); };
+  });
+  appEl.querySelectorAll('[data-move-down]').forEach(btn => {
+    btn.onclick = (e) => { e.stopPropagation(); moveWithinStatus(btn.dataset.moveDown, 1); };
+  });
+  appEl.querySelectorAll('[data-edit-title]').forEach(inp => {
+    inp.onclick = (e) => e.stopPropagation();
+    inp.oninput = () => { const s = songs.find(x=>x.id===inp.dataset.editTitle); if (s){ s.title = inp.value; saveSongs(); } };
+  });
+  appEl.querySelectorAll('[data-edit-artist]').forEach(inp => {
+    inp.onclick = (e) => e.stopPropagation();
+    inp.oninput = () => { const s = songs.find(x=>x.id===inp.dataset.editArtist); if (s){ s.artist = inp.value; saveSongs(); } };
+  });
+  appEl.querySelectorAll('[data-edit-genre]').forEach(inp => {
+    inp.onclick = (e) => e.stopPropagation();
+    inp.oninput = () => { const s = songs.find(x=>x.id===inp.dataset.editGenre); if (s){ s.genre = inp.value; saveSongs(); } };
+  });
+  appEl.querySelectorAll('[data-status-select]').forEach(sel => {
+    sel.onclick = (e) => e.stopPropagation();
+    sel.onchange = () => onChangeStatus(sel.dataset.statusSelect, sel.value);
+  });
+  appEl.querySelectorAll('[data-delete]').forEach(btn => {
+    btn.onclick = (e) => { e.stopPropagation(); onDeleteSong(btn.dataset.delete); };
+  });
+}
+
+function cardHtml(song){
+  const expanded = expandedId === song.id;
+  return `
+    <div class="song-card ${expanded?'expanded':''}" data-id="${song.id}">
+      <div class="song-card-head" data-toggle-card="${song.id}">
+        <div class="song-title-block">
+          <div class="song-title">${escapeHtml(song.title)}</div>
+          <div class="song-meta">${escapeHtml(song.artist||'')}${song.genre ? ' · ' + escapeHtml(song.genre) : ''}</div>
+        </div>
+        <div class="song-card-arrows">
+          <button data-move-up="${song.id}" title="Puja">▲</button>
+          <button data-move-down="${song.id}" title="Baixa">▼</button>
+        </div>
+      </div>
+      ${expanded ? cardBodyHtml(song) : ''}
+    </div>
+  `;
+}
+
+function cardBodyHtml(song){
+  return `
+    <div class="song-card-body">
+      ${song.videos.map(v => `<video class="song-video" controls preload="metadata" src="${v.url||''}"></video>`).join('')}
+      <div class="song-edit-row">
+        <input type="text" data-edit-title="${song.id}" value="${escapeHtml(song.title)}" placeholder="Títol">
+        <input type="text" data-edit-artist="${song.id}" value="${escapeHtml(song.artist||'')}" placeholder="Artista">
+        <input type="text" data-edit-genre="${song.id}" value="${escapeHtml(song.genre||'')}" placeholder="Gènere" list="genreList">
+      </div>
+      <div class="song-actions-row">
+        <select data-status-select="${song.id}">
+          ${STATUSES.map(s => `<option value="${s.key}" ${s.key===song.status?'selected':''}>${s.label}</option>`).join('')}
+        </select>
+        <button class="btn btn-danger" data-delete="${song.id}">Esborra</button>
+      </div>
+    </div>
+  `;
+}
+
+async function onToggleExpand(id){
+  if (expandedId === id){
+    const song = songs.find(s => s.id === id);
+    revokeVideoUrls(song);
+    expandedId = null;
+    renderBoard();
+    return;
+  }
+  const prev = songs.find(s => s.id === expandedId);
+  revokeVideoUrls(prev);
+  expandedId = id;
+  renderBoard();
+  const song = songs.find(s => s.id === id);
+  await loadVideoUrls(song);
+  if (expandedId === id) renderBoard();
+}
+
+function moveWithinStatus(id, dir){
+  const song = songs.find(s => s.id === id);
+  if (!song) return;
+  const group = songs.filter(s => s.status === song.status);
+  const idx = group.indexOf(song);
+  const targetIdx = idx + dir;
+  if (targetIdx < 0 || targetIdx >= group.length) return;
+  const other = group[targetIdx];
+  const ai = songs.indexOf(song), bi = songs.indexOf(other);
+  songs[ai] = other; songs[bi] = song;
+  renderBoard();
+  saveSongs();
+}
+
+function onChangeStatus(id, newStatus){
+  const idx = songs.findIndex(s => s.id === id);
+  if (idx === -1) return;
+  const [song] = songs.splice(idx, 1);
+  song.status = newStatus;
+  songs.push(song);
+  renderBoard();
+  saveSongs();
+}
+
+async function onDeleteSong(id){
+  if (!confirm('Segur que vols esborrar aquesta cançó i el seu vídeo?')) return;
+  const idx = songs.findIndex(s => s.id === id);
+  if (idx === -1) return;
+  const [song] = songs.splice(idx, 1);
+  if (expandedId === id) expandedId = null;
+  for (const v of song.videos){
+    if (v.url) URL.revokeObjectURL(v.url);
+    await storeDelete('media:' + v.id);
+  }
+  renderBoard();
+  await saveSongs();
+}
+
+/* ---------------- add-songs flow ---------------- */
+function renderAddSongs(){
+  appEl.innerHTML = `
+    <div class="top-nav">
+      <button class="back-btn" id="backBtn">←</button>
+      <div class="eyebrow" style="margin:0;">Afegeix cançons</div>
+    </div>
+    <h1 class="title display">Tria els vídeos</h1>
+    <p class="subtitle">Selecciona un o diversos arxius de vídeo de qualsevol carpeta. Després edita el títol, l'artista i el gènere de cadascun abans de desar-los.</p>
+    <div class="upload-zone" id="uploadZone">
+      <input type="file" id="videoInput" accept="video/*" multiple>
+      📂 Toca per triar vídeos
+    </div>
+    <div id="stagedArea"></div>
+    <div class="footer-actions">
+      <button class="btn btn-outline" id="cancelBtn">Cancel·la</button>
+      <button class="btn btn-brass" id="saveSongsBtn">Desa cançons</button>
+    </div>
+  `;
+  document.getElementById('backBtn').onclick = () => { view = 'board'; render(); };
+  document.getElementById('cancelBtn').onclick = () => { view = 'board'; render(); };
+  document.getElementById('uploadZone').onclick = () => document.getElementById('videoInput').click();
+  document.getElementById('videoInput').onchange = handleVideosStaged;
+  document.getElementById('saveSongsBtn').onclick = onSaveSongs;
+  renderStagedArea();
+}
+
+function handleVideosStaged(e){
+  const files = Array.from(e.target.files);
+  for (const file of files){
+    stagedSongs.push({
+      id: uid(), filename: file.name, title: labelFromFilename(file.name),
+      artist: '', genre: '', status: 'aprendre', blob: file
+    });
+  }
+  renderStagedArea();
+}
+
+function renderStagedArea(){
+  const el = document.getElementById('stagedArea');
+  if (!el) return;
+  if (stagedSongs.length === 0){ el.innerHTML = ''; return; }
+  el.innerHTML = `
+    <div class="bulk-apply-bar">
+      <input type="text" id="bulkArtist" placeholder="Artista per a totes">
+      <input type="text" id="bulkGenre" placeholder="Gènere per a totes" list="genreList">
+      <button class="btn btn-outline" id="bulkApplyBtn">Aplica a totes</button>
+    </div>
+    ${stagedSongs.map(s => `
+      <div class="staged-song" data-id="${s.id}">
+        <div class="staged-song-top">
+          <span class="fname">${escapeHtml(s.filename)}</span>
+          <button class="rm" data-rm="${s.id}">✕</button>
+        </div>
+        <input type="text" value="${escapeHtml(s.title)}" data-stage-title="${s.id}" placeholder="Títol">
+        <div class="staged-song-fields">
+          <input type="text" value="${escapeHtml(s.artist)}" data-stage-artist="${s.id}" placeholder="Artista">
+          <input type="text" value="${escapeHtml(s.genre)}" data-stage-genre="${s.id}" placeholder="Gènere" list="genreList">
+        </div>
+        <select data-stage-status="${s.id}">
+          ${STATUSES.map(st => `<option value="${st.key}" ${st.key===s.status?'selected':''}>${st.label}</option>`).join('')}
+        </select>
+      </div>
+    `).join('')}
+  `;
+  document.getElementById('bulkApplyBtn').onclick = () => {
+    const artist = document.getElementById('bulkArtist').value;
+    const genre = document.getElementById('bulkGenre').value;
+    stagedSongs.forEach(s => { if (artist) s.artist = artist; if (genre) s.genre = genre; });
+    renderStagedArea();
+  };
+  el.querySelectorAll('[data-stage-title]').forEach(inp => {
+    inp.oninput = () => { const s = stagedSongs.find(x=>x.id===inp.dataset.stageTitle); if (s) s.title = inp.value; };
+  });
+  el.querySelectorAll('[data-stage-artist]').forEach(inp => {
+    inp.oninput = () => { const s = stagedSongs.find(x=>x.id===inp.dataset.stageArtist); if (s) s.artist = inp.value; };
+  });
+  el.querySelectorAll('[data-stage-genre]').forEach(inp => {
+    inp.oninput = () => { const s = stagedSongs.find(x=>x.id===inp.dataset.stageGenre); if (s) s.genre = inp.value; };
+  });
+  el.querySelectorAll('[data-stage-status]').forEach(sel => {
+    sel.onchange = () => { const s = stagedSongs.find(x=>x.id===sel.dataset.stageStatus); if (s) s.status = sel.value; };
+  });
+  el.querySelectorAll('[data-rm]').forEach(btn => {
+    btn.onclick = () => { stagedSongs = stagedSongs.filter(x=>x.id!==btn.dataset.rm); renderStagedArea(); };
+  });
+}
+
+async function onSaveSongs(){
+  if (stagedSongs.length === 0){ showToast('Tria almenys un vídeo.'); return; }
+  showToast('Desant...');
+  for (const s of stagedSongs){
+    const videoId = uid();
+    const ok = await storeSetBlob('media:' + videoId, s.blob);
+    if (!ok) continue;
+    songs.push({
+      id: s.id, title: s.title.trim() || s.filename, artist: s.artist.trim(), genre: s.genre.trim(),
+      status: s.status, videos: [{ id: videoId, filename: s.filename, mediaType: 'video' }]
+    });
+  }
+  await saveSongs();
+  stagedSongs = [];
+  showToast('Cançons desades.');
+  view = 'board';
+  render();
+}
+
+/* ---------------- boot ---------------- */
+async function boot(){
+  view = 'loading'; render();
+  await loadSongs();
+  view = 'board';
+  render();
+}
+
+boot();
+</script>
+</body>
+</html>
