@@ -67,6 +67,7 @@ function carregarActivitats() {
             " | 📏 " + distanciaKm + " km" +
             " | ⛰️ " + act.total_elevation_gain + " m" +
             (act.weighted_average_watts ? " | ⚡ " + Math.round(act.weighted_average_watts) + " W (ponderada)" : "") +
+            (act.kilojoules ? " | 🔋 " + Math.round(act.kilojoules) + " kJ" : "") +
             (act.suffer_score ? " | 💪 Esforç relatiu: " + act.suffer_score : "") +
             (act.moving_time ? " | ⏱️ Temps en moviment: " + formatTemps(act.moving_time) : "") +
             (velocitatMitjana ? " | 🚀 Vel. mitjana: " + velocitatMitjana + " km/h" : "") +
